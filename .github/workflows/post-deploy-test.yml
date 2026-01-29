@@ -1,0 +1,82 @@
+name: Post-Deployment Tests
+
+on:
+  # Run manually against any deployed environment
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'Railway API URL (e.g. https://apcd-api.up.railway.app)'
+        required: true
+        type: string
+      web_url:
+        description: 'Railway Web URL (e.g. https://apcd-web.up.railway.app)'
+        required: true
+        type: string
+
+  # Trigger automatically after deploy workflow completes
+  workflow_run:
+    workflows: ['Deploy']
+    types: [completed]
+
+jobs:
+  smoke-tests:
+    runs-on: ubuntu-latest
+    # Skip if triggered by a failed deploy
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Wait for Railway services to be ready
+        run: |
+          API="${{ inputs.api_url || vars.API_URL }}"
+          echo "Waiting for API at $API to respond..."
+          for i in $(seq 1 12); do
+            if curl -sf --max-time 10 "$API/api/health" > /dev/null 2>&1; then
+              echo "API is ready!"
+              break
+            fi
+            echo "Attempt $i/12 - API not ready, waiting 10s..."
+            sleep 10
+          done
+
+      - name: Run post-deployment smoke tests
+        run: npx tsx scripts/post-deploy-test.ts
+        env:
+          API_URL: ${{ inputs.api_url || vars.API_URL }}
+          WEB_URL: ${{ inputs.web_url || vars.WEB_URL }}
+
+      - name: Run API unit tests (verify build integrity)
+        run: pnpm --filter @apcd/api test -- --passWithNoTests
+        env:
+          DATABASE_URL: 'postgresql://skip:skip@localhost:5432/skip'
+          JWT_SECRET: test-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+
+      - name: Run Web unit tests (verify build integrity)
+        run: pnpm --filter @apcd/web test
+
+      - name: Report results
+        if: failure()
+        run: |
+          echo "::error::Post-deployment tests failed against:"
+          echo "  API: ${{ inputs.api_url || vars.API_URL }}"
+          echo "  Web: ${{ inputs.web_url || vars.WEB_URL }}"
+          echo "Check the test output above for details."

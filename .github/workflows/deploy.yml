@@ -59,6 +59,15 @@ jobs:
           echo "Deploying Web to ${{ inputs.environment }}..."
           # Add deployment commands for your infrastructure
 
+      - name: Wait for Railway deployment to stabilize
+        run: sleep 30
+
+      - name: Run post-deployment smoke tests
+        run: npx tsx scripts/post-deploy-test.ts
+        env:
+          API_URL: ${{ vars.API_URL }}
+          WEB_URL: ${{ vars.WEB_URL }}
+
       - name: Notify deployment
         if: always()
         run: |
