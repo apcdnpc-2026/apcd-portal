@@ -8,6 +8,6 @@
     "declaration": true,
     "declarationMap": true
   },
-  "include": ["index.ts", "prisma/seed.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["index.ts"],
+  "exclude": ["node_modules", "dist", "prisma"]
 }
