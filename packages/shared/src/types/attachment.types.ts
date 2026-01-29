@@ -325,3 +325,29 @@ export const ALLOWED_MIME_TYPES = [
 
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;       // 10 MB per file
 export const MAX_TOTAL_UPLOAD_BYTES = 100 * 1024 * 1024;   // 100 MB total per application
+
+// ============================================================================
+// Factory Photo Slots (6 mandatory geo-tagged photos)
+// ============================================================================
+
+export const FACTORY_PHOTO_SLOTS = [
+  { slot: 'FRONT_VIEW', label: 'Front View of Factory', order: 1 },
+  { slot: 'MANUFACTURING_AREA', label: 'Manufacturing Area', order: 2 },
+  { slot: 'TESTING_LAB', label: 'Testing Laboratory', order: 3 },
+  { slot: 'QC_AREA', label: 'Quality Control Area', order: 4 },
+  { slot: 'RAW_MATERIAL_STORAGE', label: 'Raw Material Storage', order: 5 },
+  { slot: 'FINISHED_GOODS', label: 'Finished Goods Area', order: 6 },
+] as const;
+
+export type FactoryPhotoSlot = typeof FACTORY_PHOTO_SLOTS[number]['slot'];
+
+export interface GeoValidationResult {
+  hasGps: boolean;
+  hasTimestamp: boolean;
+  hasValidGeoTag: boolean;
+  latitude?: number;
+  longitude?: number;
+  timestamp?: Date;
+  isWithinIndia?: boolean;
+  error?: string;
+}

@@ -9,12 +9,24 @@ export interface GeoTagResult {
   error?: string;
 }
 
+export interface GeoValidationResult {
+  hasGps: boolean;
+  hasTimestamp: boolean;
+  hasValidGeoTag: boolean;
+  latitude?: number;
+  longitude?: number;
+  timestamp?: Date;
+  isWithinIndia?: boolean;
+  error?: string;
+}
+
 @Injectable()
 export class GeoTagValidatorService {
   /**
-   * Extract GPS coordinates from image EXIF data
+   * Extract and validate GPS coordinates AND timestamp from image EXIF data.
+   * Returns granular validation results for badge display.
    */
-  async extractGeoTag(buffer: Buffer): Promise<GeoTagResult> {
+  async extractAndValidate(buffer: Buffer): Promise<GeoValidationResult> {
     try {
       const exif = await exifr.parse(buffer, {
         gps: true,
@@ -22,34 +34,51 @@ export class GeoTagValidatorService {
       });
 
       if (!exif) {
-        return { hasValidGeoTag: false, error: 'No EXIF data found' };
+        return {
+          hasGps: false,
+          hasTimestamp: false,
+          hasValidGeoTag: false,
+          error: 'No EXIF data found. Use a Timestamp Camera app to capture photos.',
+        };
       }
 
-      const { latitude, longitude } = exif;
+      const hasGps =
+        typeof exif.latitude === 'number' &&
+        typeof exif.longitude === 'number' &&
+        exif.latitude >= -90 && exif.latitude <= 90 &&
+        exif.longitude >= -180 && exif.longitude <= 180;
 
-      if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-        return { hasValidGeoTag: false, error: 'GPS coordinates not found in image' };
-      }
+      const hasTimestamp = !!exif.DateTimeOriginal;
 
-      // Validate coordinates are within reasonable bounds
-      if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-        return { hasValidGeoTag: false, error: 'Invalid GPS coordinates' };
-      }
-
-      // Extract timestamp
-      let timestamp: Date | undefined;
-      if (exif.DateTimeOriginal) {
-        timestamp = new Date(exif.DateTimeOriginal);
-      }
-
-      return {
-        hasValidGeoTag: true,
-        latitude,
-        longitude,
-        timestamp,
+      const result: GeoValidationResult = {
+        hasGps,
+        hasTimestamp,
+        hasValidGeoTag: hasGps && hasTimestamp,
       };
+
+      if (hasGps) {
+        result.latitude = exif.latitude;
+        result.longitude = exif.longitude;
+        result.isWithinIndia = this.isWithinIndia(exif.latitude, exif.longitude);
+      }
+
+      if (hasTimestamp) {
+        result.timestamp = new Date(exif.DateTimeOriginal);
+      }
+
+      if (!hasGps && !hasTimestamp) {
+        result.error = 'Photo has no GPS coordinates or timestamp. Use a Timestamp Camera app.';
+      } else if (!hasGps) {
+        result.error = 'GPS coordinates not found in image EXIF data.';
+      } else if (!hasTimestamp) {
+        result.error = 'Timestamp not found in image EXIF data.';
+      }
+
+      return result;
     } catch (error) {
       return {
+        hasGps: false,
+        hasTimestamp: false,
         hasValidGeoTag: false,
         error: `Failed to parse EXIF data: ${(error as Error).message}`,
       };
@@ -57,10 +86,23 @@ export class GeoTagValidatorService {
   }
 
   /**
+   * Extract GPS coordinates from image EXIF data (legacy method).
+   */
+  async extractGeoTag(buffer: Buffer): Promise<GeoTagResult> {
+    const result = await this.extractAndValidate(buffer);
+    return {
+      hasValidGeoTag: result.hasValidGeoTag,
+      latitude: result.latitude,
+      longitude: result.longitude,
+      timestamp: result.timestamp,
+      error: result.error,
+    };
+  }
+
+  /**
    * Validate that coordinates are within India bounds (approximately)
    */
   isWithinIndia(latitude: number, longitude: number): boolean {
-    // India approximate bounds
     const INDIA_BOUNDS = {
       minLat: 6.5,
       maxLat: 35.5,

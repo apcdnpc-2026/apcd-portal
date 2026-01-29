@@ -451,6 +451,8 @@ model Attachment {
   geoLongitude    Decimal?     @map("geo_longitude")
   geoTimestamp    DateTime?    @map("geo_timestamp")
   hasValidGeoTag  Boolean?     @map("has_valid_geo_tag")
+  isWithinIndia   Boolean?     @map("is_within_india")
+  photoSlot       String?      @map("photo_slot")        // FRONT_VIEW, MANUFACTURING_AREA, etc.
 
   // Verification
   isVerified      Boolean      @default(false) @map("is_verified")

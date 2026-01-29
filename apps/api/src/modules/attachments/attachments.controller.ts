@@ -28,6 +28,7 @@ export class AttachmentsController {
         file: { type: 'string', format: 'binary' },
         applicationId: { type: 'string' },
         documentType: { type: 'string' },
+        photoSlot: { type: 'string', description: 'Required for GEO_TAGGED_PHOTOS: FRONT_VIEW, MANUFACTURING_AREA, TESTING_LAB, QC_AREA, RAW_MATERIAL_STORAGE, FINISHED_GOODS' },
       },
     },
   })
@@ -44,9 +45,10 @@ export class AttachmentsController {
     file: Express.Multer.File,
     @Body('applicationId') applicationId: string,
     @Body('documentType') documentType: DocumentType,
+    @Body('photoSlot') photoSlot: string | undefined,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.attachmentsService.upload(applicationId, documentType, file, user.sub);
+    return this.attachmentsService.upload(applicationId, documentType, file, user.sub, photoSlot);
   }
 
   @Get('application/:applicationId')

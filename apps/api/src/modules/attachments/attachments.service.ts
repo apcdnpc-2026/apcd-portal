@@ -40,6 +40,7 @@ export class AttachmentsService {
     documentType: DocumentType,
     file: Express.Multer.File,
     userId: string,
+    photoSlot?: string,
   ) {
     // Validate application ownership and status
     const application = await this.prisma.application.findUnique({
@@ -86,24 +87,43 @@ export class AttachmentsService {
     // Generate storage path
     const objectKey = MinioService.buildObjectKey(applicationId, documentType, file.originalname);
 
-    // Extract geo-tag for photos
-    let geoData: {
-      geoLatitude?: number;
-      geoLongitude?: number;
-      geoTimestamp?: Date;
-      hasValidGeoTag?: boolean;
-    } = {};
+    // Extract and validate geo-tag for factory photos
+    let geoData: Record<string, any> = {};
 
     if (
       documentType === DocumentType.GEO_TAGGED_PHOTOS &&
       file.mimetype.startsWith('image/')
     ) {
-      const geoResult = await this.geoValidator.extractGeoTag(file.buffer);
+      if (!photoSlot) {
+        throw new BadRequestException('photoSlot is required for geo-tagged factory photos');
+      }
+
+      // Check for duplicate slot
+      const existing = await this.prisma.attachment.findFirst({
+        where: { applicationId, documentType, photoSlot },
+      });
+      if (existing) {
+        throw new BadRequestException(
+          `A photo for slot "${photoSlot}" already exists. Delete the existing one first.`,
+        );
+      }
+
+      const geoResult = await this.geoValidator.extractAndValidate(file.buffer);
+
+      if (!geoResult.hasGps || !geoResult.hasTimestamp) {
+        throw new BadRequestException(
+          geoResult.error ||
+            'Photo must contain both GPS coordinates and a timestamp in EXIF data. Use a Timestamp Camera app.',
+        );
+      }
+
       geoData = {
-        hasValidGeoTag: geoResult.hasValidGeoTag,
+        hasValidGeoTag: true,
         geoLatitude: geoResult.latitude,
         geoLongitude: geoResult.longitude,
         geoTimestamp: geoResult.timestamp,
+        isWithinIndia: geoResult.isWithinIndia,
+        photoSlot,
       };
     }
 

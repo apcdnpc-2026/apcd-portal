@@ -113,10 +113,14 @@ export const apiDelete = <T>(url: string, config?: AxiosRequestConfig) =>
 export const uploadFile = async (
   url: string,
   file: File,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  extraFields?: Record<string, string>,
 ) => {
   const formData = new FormData();
   formData.append('file', file);
+  if (extraFields) {
+    Object.entries(extraFields).forEach(([key, value]) => formData.append(key, value));
+  }
 
   const response = await api.post(url, formData, {
     headers: {
