@@ -1,20 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Save, Check, Building2 } from 'lucide-react';
 import Link from 'next/link';
-
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/use-toast';
-import { apiPost, apiGet, apiPut } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 
 import { Step2ApcdTypes } from '@/components/application/step2-apcd-types';
 import { Step3Documents } from '@/components/application/step3-documents';
 import { Step4Review } from '@/components/application/step4-review';
+import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
+import { apiPost, apiGet, apiPut } from '@/lib/api';
 
 const STEPS = [
   { id: 1, title: 'Select APCD Types', component: Step2ApcdTypes },
@@ -77,7 +76,8 @@ export default function NewApplicationPage() {
 
   // Update application mutation
   const updateAppMutation = useMutation({
-    mutationFn: (data: any) => apiPut<{ success: boolean; data: any }>(`/applications/${applicationId}`, data),
+    mutationFn: (data: any) =>
+      apiPut<{ success: boolean; data: any }>(`/applications/${applicationId}`, data),
     onSuccess: () => {
       toast({ title: 'Application saved', description: 'Your changes have been saved.' });
     },
@@ -141,7 +141,8 @@ export default function NewApplicationPage() {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-red-800">Profile Required</h3>
                   <p className="text-red-700 mt-1">
-                    You must complete your company profile before starting an empanelment application.
+                    You must complete your company profile before starting an empanelment
+                    application.
                   </p>
                   <div className="mt-4">
                     <Button asChild>
@@ -204,7 +205,9 @@ export default function NewApplicationPage() {
                     </div>
                     <span
                       className={`mt-2 text-xs ${
-                        currentStep === step.id ? 'text-primary font-medium' : 'text-muted-foreground'
+                        currentStep === step.id
+                          ? 'text-primary font-medium'
+                          : 'text-muted-foreground'
                       }`}
                     >
                       {step.title}
@@ -235,7 +238,9 @@ export default function NewApplicationPage() {
         {applicationId && (
           <Card>
             <CardHeader>
-              <CardTitle>Step {currentStep}: {STEPS[currentStep - 1].title}</CardTitle>
+              <CardTitle>
+                Step {currentStep}: {STEPS[currentStep - 1].title}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <StepComponent
@@ -250,11 +255,7 @@ export default function NewApplicationPage() {
         {/* Navigation */}
         {applicationId && (
           <div className="flex items-center justify-between">
-            <Button
-              variant="outline"
-              onClick={handlePrevious}
-              disabled={currentStep === 1}
-            >
+            <Button variant="outline" onClick={handlePrevious} disabled={currentStep === 1}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Previous
             </Button>
@@ -269,13 +270,11 @@ export default function NewApplicationPage() {
                 Save Draft
               </Button>
 
-              {currentStep < STEPS.length ? (
+              {currentStep < STEPS.length && (
                 <Button onClick={handleNext}>
                   Next
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
-              ) : (
-                <Button>Submit Application</Button>
               )}
             </div>
           </div>
