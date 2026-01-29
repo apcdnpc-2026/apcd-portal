@@ -1,0 +1,813 @@
+// ============================================================================
+// APCD OEM Empanelment Portal - Database Schema
+// National Productivity Council (NPC) / CPCB
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum Role {
+  OEM            // OEM Applicant
+  OFFICER        // NPC Officer (document verification)
+  COMMITTEE      // Committee Member (evaluation & scoring)
+  FIELD_VERIFIER // Field Verifier (site inspection)
+  ADMIN          // System Admin
+  SUPER_ADMIN    // Super Admin
+}
+
+enum ApplicationStatus {
+  DRAFT                   // OEM is filling the form
+  SUBMITTED               // OEM has submitted, awaiting officer review
+  UNDER_REVIEW            // Officer is reviewing documents
+  QUERIED                 // Officer raised queries, awaiting OEM response
+  RESUBMITTED             // OEM responded to queries
+  COMMITTEE_REVIEW        // Assigned to committee for evaluation
+  COMMITTEE_QUERIED       // Committee requested additional info
+  FIELD_VERIFICATION      // Field verification in progress
+  LAB_TESTING             // Emission testing at lab
+  FINAL_REVIEW            // Final committee review post field/lab
+  APPROVED                // Empanelment approved
+  PROVISIONALLY_APPROVED  // Provisional certificate issued
+  REJECTED                // Application rejected
+  WITHDRAWN               // OEM withdrew application
+  RENEWAL_PENDING         // Renewal application submitted
+  EXPIRED                 // Empanelment expired (not renewed)
+  SUSPENDED               // Empanelment suspended
+  BLACKLISTED             // OEM blacklisted
+}
+
+enum PaymentType {
+  APPLICATION_FEE     // Rs 25,000 (one-time, non-refundable)
+  EMPANELMENT_FEE     // Rs 65,000 per APCD model type
+  FIELD_VERIFICATION  // Rs 57,000
+  EMISSION_TESTING    // Actuals
+  ANNUAL_RENEWAL      // Rs 35,000
+  SURVEILLANCE_VISIT  // As required, actuals
+}
+
+enum PaymentStatus {
+  PENDING
+  INITIATED       // Razorpay order created
+  COMPLETED       // Payment confirmed
+  FAILED          // Payment failed
+  REFUNDED        // Payment refunded
+  VERIFICATION_PENDING // Manual NEFT awaiting officer verification
+  VERIFIED        // Manual NEFT verified by officer
+}
+
+enum PaymentMethod {
+  RAZORPAY
+  NEFT
+  RTGS
+}
+
+enum DocumentType {
+  // Mandatory documents (from application form pp.12-15)
+  COMPANY_REGISTRATION          // 1. Certificate of Incorporation / Udyam
+  GST_CERTIFICATE               // 2. Valid GSTIN Certificate
+  PAN_CARD                      // 2. PAN Card copy
+  PAYMENT_PROOF                 // 3. Application fee transaction details
+  SERVICE_SUPPORT_UNDERTAKING   // 4. Notarized undertaking (Annexure 4)
+  NON_BLACKLISTING_DECLARATION  // 5. Self-declaration (Annexure 5)
+  TURNOVER_CERTIFICATE          // 6. CA-certified financial statements
+  ISO_CERTIFICATION             // 7. ISO 9001/14001/45001 certificates
+  PRODUCT_DATASHEET             // 8. Detailed specs per APCD model
+  CLIENT_PERFORMANCE_CERT       // 9. Min 3 per APCD (Annexure 12)
+  TEST_CERTIFICATE              // 10. NABL/EPA lab reports
+  DESIGN_CALCULATIONS           // 11. For installed APCDs
+  MATERIAL_CONSTRUCTION_CERT    // 12. Material certificates (Annexure 11)
+  WARRANTY_DOCUMENT             // 13. Official warranty policy
+  BANK_SOLVENCY_CERT            // 14. Issued within last 12 months
+  INSTALLATION_EXPERIENCE       // 15. Min 3 installations (Annexure 6a)
+  GA_DRAWING                    // 16. General Arrangement Drawing
+  PROCESS_FLOW_DIAGRAM          // 17. Per APCD model
+  CONSENT_TO_OPERATE            // 18. CTO or non-applicability (Annexure 9)
+  GEO_TAGGED_PHOTOS             // 19. 2-3 color photos with GPS EXIF
+  TECHNICAL_CATALOGUE           // 20. Detailed APCD specs/brochures
+  ORG_CHART                     // 21. Organizational chart
+  STAFF_QUALIFICATION_PROOF     // 22. Names, qualifications (Annexure 7)
+  GST_FILING_PROOF              // 23. GST returns past 1 year
+  NO_LEGAL_DISPUTES_AFFIDAVIT   // 24. Notarized (Annexure 8)
+  COMPLAINT_HANDLING_POLICY     // 25. Written SOP
+  ESCALATION_MECHANISM          // 26. Escalation process + corrective actions
+  // Optional
+  MAKE_IN_INDIA_CERT            // Annexure 3 (Class-I Local Supplier)
+  STARTUP_RECOGNITION           // DPIIT Startup Recognition
+  UDYAM_CERTIFICATE             // MSME Udyam registration
+  BANK_ACCOUNT_DETAILS          // Annexure 10
+  FIELD_VERIFICATION_FORMAT     // Annexure 6b
+  GLOBAL_SUPPLY_DOCS            // Export performance documents
+  // Field verification & committee
+  FIELD_REPORT                  // NPC field verification report
+  FIELD_PHOTOS                  // Photos from field visit
+  LAB_TEST_REPORT               // Emission testing report
+  OTHER                         // Any additional document
+}
+
+enum APCDCategory {
+  ESP
+  BAG_FILTER
+  CYCLONE
+  WET_SCRUBBER
+  DRY_SCRUBBER
+  HYBRID_OTHER
+  FUME_EXTRACTION
+}
+
+enum APCDInstallationCategory {
+  BOILER_FURNACE_TFH        // Category 1: Boilers/Furnaces/TFH
+  NON_BOILER_NON_FURNACE    // Category 2: Non-Boiler/Non-Furnace
+  BOTH                      // Both categories
+}
+
+enum FirmType {
+  PROPRIETARY
+  PRIVATE_LIMITED
+  LIMITED_COMPANY
+  PUBLIC_SECTOR
+  SOCIETY
+}
+
+enum FirmSize {
+  COTTAGE
+  MICRO
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+enum QueryStatus {
+  OPEN       // Query raised, awaiting response
+  RESPONDED  // OEM has responded
+  RESOLVED   // Officer/Committee satisfied
+  ESCALATED  // Escalated to senior
+}
+
+enum CertificateType {
+  PROVISIONAL
+  FINAL
+}
+
+enum CertificateStatus {
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  REVOKED
+}
+
+enum EvaluationCriterion {
+  EXPERIENCE_SCOPE          // 1. Experience & Scope of Supply
+  TECHNICAL_SPECIFICATION   // 2. Technical Specification of APCDs
+  TECHNICAL_TEAM            // 3. Technical Team & Capability
+  FINANCIAL_STANDING        // 4. Financial Standing
+  LEGAL_QUALITY_COMPLIANCE  // 5. Legal & Quality Compliance
+  COMPLAINT_HANDLING        // 6. Customer Complaint Handling
+  CLIENT_FEEDBACK           // 7. Client Feedback
+  GLOBAL_SUPPLY             // 8. Optional - Global Supply
+}
+
+enum EvaluationRecommendation {
+  APPROVE
+  REJECT
+  NEED_MORE_INFO
+  FIELD_VERIFICATION_REQUIRED
+}
+
+enum NotificationType {
+  APPLICATION_SUBMITTED
+  APPLICATION_QUERIED
+  QUERY_RESPONDED
+  APPLICATION_APPROVED
+  APPLICATION_REJECTED
+  PAYMENT_RECEIVED
+  PAYMENT_VERIFIED
+  FIELD_VISIT_SCHEDULED
+  CERTIFICATE_ISSUED
+  RENEWAL_REMINDER
+  GENERAL
+}
+
+// ============================================================================
+// CORE TABLES
+// ============================================================================
+
+/// System users - all roles share this table
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  role          Role
+  isActive      Boolean  @default(true) @map("is_active")
+  isVerified    Boolean  @default(false) @map("is_verified")
+  firstName     String   @map("first_name")
+  lastName      String   @map("last_name")
+  phone         String?
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  oemProfile          OemProfile?
+  applications        Application[]      @relation("ApplicantApplications")
+  assignedReviews     Application[]      @relation("AssignedOfficer")
+  queries             Query[]            @relation("QueryRaisedBy")
+  queryResponses      QueryResponse[]
+  evaluations         CommitteeEvaluation[]
+  fieldReports        FieldReport[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  paymentVerifications Payment[]         @relation("PaymentVerifiedBy")
+  refreshTokens       RefreshToken[]
+
+  @@map("users")
+}
+
+/// Refresh tokens for JWT auth
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+/// OEM company profile - form fields 1-14
+model OemProfile {
+  id                    String   @id @default(uuid())
+  userId                String   @unique @map("user_id")
+  companyName           String   @map("company_name")              // Field 1
+  fullAddress           String   @map("full_address")              // Field 2
+  state                 String                                      // Field 3
+  country               String   @default("India")                 // Field 4
+  pinCode               String   @map("pin_code")                  // Field 5
+  contactNo             String   @map("contact_no")                // Field 6
+  gstRegistrationNo     String   @map("gst_registration_no")       // Field 7
+  panNo                 String   @map("pan_no")                    // Field 8
+  firmType              FirmType @map("firm_type")                 // Field 9
+  firmAreaSqm           Decimal? @map("firm_area_sqm")             // Field 10
+  employeeCount         Int?     @map("employee_count")            // Field 11
+  gpsLatitude           Decimal? @map("gps_latitude")              // Field 12
+  gpsLongitude          Decimal? @map("gps_longitude")             // Field 12
+  firmSize              FirmSize? @map("firm_size")                // Field 13
+  udyamRegistrationNo   String?  @map("udyam_registration_no")    // Field 14
+  isMSE                 Boolean  @default(false) @map("is_mse")
+  isStartup             Boolean  @default(false) @map("is_startup")
+  isLocalSupplier       Boolean  @default(false) @map("is_local_supplier")
+  localContentPercent   Decimal? @map("local_content_percent")     // For Class-I
+  dpiitRecognitionNo    String?  @map("dpiit_recognition_no")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@index([gstRegistrationNo])
+  @@index([panNo])
+  @@map("oem_profiles")
+}
+
+/// Contact persons - form fields 15-16
+model ContactPerson {
+  id            String  @id @default(uuid())
+  applicationId String  @map("application_id")
+  type          String  // "COMMERCIAL" or "TECHNICAL"
+  name          String
+  designation   String?
+  mobileNo      String  @map("mobile_no")
+  email         String
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("contact_persons")
+}
+
+// ============================================================================
+// APPLICATION & WORKFLOW
+// ============================================================================
+
+/// Core application table
+model Application {
+  id                  String            @id @default(uuid())
+  applicationNumber   String            @unique @map("application_number") // Auto-generated: APCD-2025-0001
+  oemProfileId        String            @map("oem_profile_id")
+  applicantId         String            @map("applicant_id")
+  assignedOfficerId   String?           @map("assigned_officer_id")
+  status              ApplicationStatus @default(DRAFT)
+  currentStep         Int               @default(1) @map("current_step")   // Multi-step form progress (1-9)
+
+  // Form field 17: Year-wise turnover
+  turnoverYear1       Decimal?          @map("turnover_year_1")   // 2022-23
+  turnoverYear2       Decimal?          @map("turnover_year_2")   // 2023-24
+  turnoverYear3       Decimal?          @map("turnover_year_3")   // 2024-25
+  turnoverYear1Label  String?           @map("turnover_year_1_label") @default("2022-23")
+  turnoverYear2Label  String?           @map("turnover_year_2_label") @default("2023-24")
+  turnoverYear3Label  String?           @map("turnover_year_3_label") @default("2024-25")
+
+  // Form field 19: ISO standards
+  hasISO9001          Boolean           @default(false) @map("has_iso_9001")
+  hasISO14001         Boolean           @default(false) @map("has_iso_14001")
+  hasISO45001         Boolean           @default(false) @map("has_iso_45001")
+  otherStandards      String?           @map("other_standards")
+
+  // Form field 20: Blacklisting
+  isBlacklisted       Boolean           @default(false) @map("is_blacklisted")
+  blacklistDetails    String?           @map("blacklist_details")
+
+  // Form field 23: Grievance redressal
+  hasGrievanceSystem  Boolean           @default(false) @map("has_grievance_system")
+
+  // Declaration
+  declarationAccepted Boolean           @default(false) @map("declaration_accepted")
+  declarationDate     DateTime?         @map("declaration_date")
+  declarationSignatory String?          @map("declaration_signatory")
+
+  // Timestamps
+  submittedAt         DateTime?         @map("submitted_at")
+  lastQueriedAt       DateTime?         @map("last_queried_at")
+  approvedAt          DateTime?         @map("approved_at")
+  rejectedAt          DateTime?         @map("rejected_at")
+  rejectionReason     String?           @map("rejection_reason")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  oemProfile              OemProfile              @relation(fields: [oemProfileId], references: [id])
+  applicant               User                    @relation("ApplicantApplications", fields: [applicantId], references: [id])
+  assignedOfficer         User?                   @relation("AssignedOfficer", fields: [assignedOfficerId], references: [id])
+  contactPersons          ContactPerson[]
+  applicationApcds        ApplicationApcd[]
+  attachments             Attachment[]
+  installationExperiences InstallationExperience[]
+  fieldVerificationSites  FieldVerificationSite[]
+  staffDetails            StaffDetail[]
+  payments                Payment[]
+  queries                 Query[]
+  evaluations             CommitteeEvaluation[]
+  fieldReports            FieldReport[]
+  certificates            Certificate[]
+  statusHistory           ApplicationStatusHistory[]
+  notifications           Notification[]
+
+  @@index([status])
+  @@index([applicantId])
+  @@index([assignedOfficerId])
+  @@index([applicationNumber])
+  @@index([oemProfileId])
+  @@map("applications")
+}
+
+/// Tracks every status change for audit trail
+model ApplicationStatusHistory {
+  id            String            @id @default(uuid())
+  applicationId String            @map("application_id")
+  fromStatus    ApplicationStatus? @map("from_status")
+  toStatus      ApplicationStatus @map("to_status")
+  changedBy     String?           @map("changed_by") // User ID
+  remarks       String?
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("application_status_history")
+}
+
+// ============================================================================
+// APCD TYPES & SELECTIONS
+// ============================================================================
+
+/// Master table for APCD types and subtypes
+model APCDType {
+  id              String       @id @default(uuid())
+  category        APCDCategory
+  subType         String       @map("sub_type")         // e.g., "Dry ESP (Plate/Tube Type)"
+  description     String?
+  isActive        Boolean      @default(true) @map("is_active")
+  sortOrder       Int          @default(0) @map("sort_order")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  applicationApcds ApplicationApcd[]
+
+  @@unique([category, subType])
+  @@map("apcd_types")
+}
+
+/// Junction: Which APCDs an application is seeking empanelment for (form fields 21-22)
+model ApplicationApcd {
+  id                    String                  @id @default(uuid())
+  applicationId         String                  @map("application_id")
+  apcdTypeId            String                  @map("apcd_type_id")
+  isManufactured        Boolean                 @default(false) @map("is_manufactured")       // Field 21: currently manufactured
+  seekingEmpanelment    Boolean                 @default(false) @map("seeking_empanelment")    // Field 22: seeking empanelment
+  installationCategory  APCDInstallationCategory? @map("installation_category")                // Category 1/2/both
+  designCapacityRange   String?                 @map("design_capacity_range")
+  createdAt             DateTime                @default(now()) @map("created_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  apcdType    APCDType    @relation(fields: [apcdTypeId], references: [id])
+
+  @@unique([applicationId, apcdTypeId])
+  @@map("application_apcds")
+}
+
+// ============================================================================
+// DOCUMENTS & ATTACHMENTS
+// ============================================================================
+
+/// All uploaded documents
+model Attachment {
+  id              String       @id @default(uuid())
+  applicationId   String       @map("application_id")
+  documentType    DocumentType @map("document_type")
+  fileName        String       @map("file_name")
+  originalName    String       @map("original_name")
+  mimeType        String       @map("mime_type")
+  fileSizeBytes   BigInt       @map("file_size_bytes")
+  storagePath     String       @map("storage_path")    // MinIO object key
+  storageBucket   String       @map("storage_bucket")
+  checksum        String?                                // SHA-256 hash
+  virusScanStatus String       @default("PENDING") @map("virus_scan_status") // PENDING, CLEAN, INFECTED
+  uploadedBy      String       @map("uploaded_by")
+
+  // Geo-tag metadata for factory photos
+  geoLatitude     Decimal?     @map("geo_latitude")
+  geoLongitude    Decimal?     @map("geo_longitude")
+  geoTimestamp    DateTime?    @map("geo_timestamp")
+  hasValidGeoTag  Boolean?     @map("has_valid_geo_tag")
+
+  // Verification
+  isVerified      Boolean      @default(false) @map("is_verified")
+  verifiedBy      String?      @map("verified_by")
+  verifiedAt      DateTime?    @map("verified_at")
+  verificationNote String?    @map("verification_note")
+
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([documentType])
+  @@index([applicationId, documentType])
+  @@map("attachments")
+}
+
+// ============================================================================
+// INSTALLATION EXPERIENCE (Annexure 6a)
+// ============================================================================
+
+model InstallationExperience {
+  id                String   @id @default(uuid())
+  applicationId     String   @map("application_id")
+  industryName      String   @map("industry_name")
+  location          String                               // Full address
+  installationDate  String   @map("installation_date")   // Month and Year
+  emissionSource    String   @map("emission_source")     // Furnace/Boiler/TFH/Other
+  apcdType          String   @map("apcd_type")
+  apcdCapacity      String?  @map("apcd_capacity")
+  performanceResult String?  @map("performance_result")  // SOx, NOx, PM in mg/Nm3
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("installation_experiences")
+}
+
+// ============================================================================
+// FIELD VERIFICATION SITES (Annexure 6b)
+// ============================================================================
+
+model FieldVerificationSite {
+  id                      String   @id @default(uuid())
+  applicationId           String   @map("application_id")
+  slNo                    Int      @map("sl_no")           // 1, 2, or 3
+  industryName            String   @map("industry_name")
+  location                String
+  industryRepName         String?  @map("industry_rep_name")
+  industryRepDesignation  String?  @map("industry_rep_designation")
+  industryRepMobile       String?  @map("industry_rep_mobile")
+  installationDate        String?  @map("installation_date")
+  apcdType                String   @map("apcd_type")
+  technologyType          String?  @map("technology_type")
+  designCapacity          String?  @map("design_capacity")
+  materialOfConstruction  String?  @map("material_of_construction")
+  warrantyPeriod          String?  @map("warranty_period")
+  portholeInlet           Boolean? @map("porthole_inlet")
+  portholeOutlet          Boolean? @map("porthole_outlet")
+  portholeDiameterInlet   String?  @map("porthole_diameter_inlet")
+  portholeDiameterOutlet  String?  @map("porthole_diameter_outlet")
+  emissionSource          String?  @map("emission_source")
+  emissionSourceCapacity  String?  @map("emission_source_capacity")
+  unitsBetweenSourceStack String?  @map("units_between_source_stack")
+  pollutantsControlled    String?  @map("pollutants_controlled")
+  stackPortholeDiameter   String?  @map("stack_porthole_diameter")
+  stackPortholeAccessible Boolean? @map("stack_porthole_accessible")
+  adequateSpaceForInspect Boolean? @map("adequate_space_for_inspect")
+  performanceResult       String?  @map("performance_result")
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, slNo])
+  @@map("field_verification_sites")
+}
+
+// ============================================================================
+// STAFF DETAILS (Annexure 7)
+// ============================================================================
+
+model StaffDetail {
+  id              String   @id @default(uuid())
+  applicationId   String   @map("application_id")
+  name            String
+  employeeId      String?  @map("employee_id")
+  designation     String
+  qualification   String                           // B.Tech Chemical, M.Tech Mechanical, Diploma, ITI, etc.
+  experienceYears Decimal  @map("experience_years")
+  isFieldVisitCoordinator Boolean @default(false) @map("is_field_visit_coordinator")
+  mobileNo        String?  @map("mobile_no")       // Only for field visit coordinator
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("staff_details")
+}
+
+// ============================================================================
+// QUERIES (Officer / Committee queries to OEM)
+// ============================================================================
+
+model Query {
+  id            String      @id @default(uuid())
+  applicationId String      @map("application_id")
+  raisedById    String      @map("raised_by_id")
+  subject       String
+  description   String
+  documentType  DocumentType? @map("document_type") // Which document the query is about
+  status        QueryStatus @default(OPEN)
+  deadline      DateTime?                           // Response deadline
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  application Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  raisedBy    User            @relation("QueryRaisedBy", fields: [raisedById], references: [id])
+  responses   QueryResponse[]
+
+  @@index([applicationId])
+  @@index([status])
+  @@map("queries")
+}
+
+model QueryResponse {
+  id          String   @id @default(uuid())
+  queryId     String   @map("query_id")
+  responderId String   @map("responder_id")
+  message     String
+  attachmentPath String? @map("attachment_path") // Optional file attached to response
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  query     Query @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  responder User  @relation(fields: [responderId], references: [id])
+
+  @@index([queryId])
+  @@map("query_responses")
+}
+
+// ============================================================================
+// COMMITTEE EVALUATION (Annexure 2 - 8 criteria)
+// ============================================================================
+
+model CommitteeEvaluation {
+  id              String                   @id @default(uuid())
+  applicationId   String                   @map("application_id")
+  evaluatorId     String                   @map("evaluator_id")
+  recommendation  EvaluationRecommendation?
+  overallRemarks  String?                  @map("overall_remarks")
+  completedAt     DateTime?                @map("completed_at")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+
+  application Application          @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  evaluator   User                  @relation(fields: [evaluatorId], references: [id])
+  scores      EvaluationScore[]
+
+  @@unique([applicationId, evaluatorId]) // One evaluation per committee member per application
+  @@index([applicationId])
+  @@map("committee_evaluations")
+}
+
+model EvaluationScore {
+  id           String              @id @default(uuid())
+  evaluationId String              @map("evaluation_id")
+  criterion    EvaluationCriterion
+  score        Int                                      // Score out of 10
+  maxScore     Int                 @default(10) @map("max_score")
+  remarks      String?
+  createdAt    DateTime            @default(now()) @map("created_at")
+
+  evaluation CommitteeEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@unique([evaluationId, criterion])
+  @@map("evaluation_scores")
+}
+
+// ============================================================================
+// FIELD VERIFICATION REPORTS (by NPC field verifiers)
+// ============================================================================
+
+model FieldReport {
+  id                  String   @id @default(uuid())
+  applicationId       String   @map("application_id")
+  verifierId          String   @map("verifier_id")
+  siteIndex           Int      @map("site_index")       // Which of the 3 sites (1, 2, 3)
+  visitDate           DateTime @map("visit_date")
+  industryName        String   @map("industry_name")
+  location            String
+  apcdCondition       String?  @map("apcd_condition")   // Physical condition observation
+  apcdOperational     Boolean? @map("apcd_operational")
+  emissionCompliant   Boolean? @map("emission_compliant")
+  inletReading        String?  @map("inlet_reading")
+  outletReading       String?  @map("outlet_reading")
+  pressureDrop        String?  @map("pressure_drop")
+  observations        String?
+  recommendation      String?
+  overallResult       String?  @map("overall_result")   // PASS / FAIL / CONDITIONAL
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  verifier    User        @relation(fields: [verifierId], references: [id])
+
+  @@index([applicationId])
+  @@map("field_reports")
+}
+
+// ============================================================================
+// PAYMENTS
+// ============================================================================
+
+model Payment {
+  id                String        @id @default(uuid())
+  applicationId     String        @map("application_id")
+  paymentType       PaymentType   @map("payment_type")
+  paymentMethod     PaymentMethod @map("payment_method")
+  status            PaymentStatus @default(PENDING)
+
+  // Amounts
+  baseAmount        Decimal       @map("base_amount")      // Before GST
+  gstRate           Decimal       @default(18) @map("gst_rate")
+  gstAmount         Decimal       @map("gst_amount")
+  discountPercent   Decimal       @default(0) @map("discount_percent") // 0 or 15
+  discountAmount    Decimal       @default(0) @map("discount_amount")
+  totalAmount       Decimal       @map("total_amount")      // Final payable
+
+  // Razorpay fields
+  razorpayOrderId   String?       @map("razorpay_order_id")
+  razorpayPaymentId String?       @map("razorpay_payment_id")
+  razorpaySignature String?       @map("razorpay_signature")
+
+  // Manual NEFT/RTGS fields
+  utrNumber         String?       @map("utr_number")
+  remitterBankName  String?       @map("remitter_bank_name")
+  neftAmount        Decimal?      @map("neft_amount")
+  neftDate          DateTime?     @map("neft_date")
+  neftProofPath     String?       @map("neft_proof_path")    // Uploaded receipt
+
+  // Verification (for manual payments)
+  verifiedById      String?       @map("verified_by_id")
+  verifiedAt        DateTime?     @map("verified_at")
+  verificationNote  String?       @map("verification_note")
+
+  // Number of APCD types (for empanelment fee calculation)
+  apcdTypeCount     Int           @default(1) @map("apcd_type_count")
+
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  verifiedBy  User?       @relation("PaymentVerifiedBy", fields: [verifiedById], references: [id])
+
+  @@index([applicationId])
+  @@index([status])
+  @@index([razorpayOrderId])
+  @@map("payments")
+}
+
+// ============================================================================
+// CERTIFICATES
+// ============================================================================
+
+model Certificate {
+  id                  String            @id @default(uuid())
+  applicationId       String            @map("application_id")
+  certificateNumber   String            @unique @map("certificate_number") // APCD-CERT-2025-0001
+  type                CertificateType
+  status              CertificateStatus @default(ACTIVE)
+  issuedDate          DateTime          @map("issued_date")
+  validFrom           DateTime          @map("valid_from")
+  validUntil          DateTime          @map("valid_until")       // 2 years from issuance
+  qrCodeData          String            @map("qr_code_data")     // Encoded verification URL
+  qrCodePath          String?           @map("qr_code_path")     // Stored QR image
+  pdfPath             String?           @map("pdf_path")          // Generated certificate PDF
+  renewedFromId       String?           @map("renewed_from_id")   // Previous certificate if renewal
+  suspendedAt         DateTime?         @map("suspended_at")
+  suspensionReason    String?           @map("suspension_reason")
+  revokedAt           DateTime?         @map("revoked_at")
+  revocationReason    String?           @map("revocation_reason")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  application Application @relation(fields: [applicationId], references: [id])
+
+  @@index([applicationId])
+  @@index([certificateNumber])
+  @@index([status])
+  @@map("certificates")
+}
+
+// ============================================================================
+// AUDIT LOG
+// ============================================================================
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  userId        String?  @map("user_id")
+  action        String                            // e.g., "APPLICATION_SUBMITTED", "QUERY_RAISED"
+  entityType    String   @map("entity_type")      // e.g., "Application", "Payment"
+  entityId      String   @map("entity_id")
+  oldValues     Json?    @map("old_values")
+  newValues     Json?    @map("new_values")
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id              String           @id @default(uuid())
+  userId          String           @map("user_id")
+  applicationId   String?          @map("application_id")
+  type            NotificationType
+  title           String
+  message         String
+  isRead          Boolean          @default(false) @map("is_read")
+  emailSent       Boolean          @default(false) @map("email_sent")
+  smsSent         Boolean          @default(false) @map("sms_sent")
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application Application? @relation(fields: [applicationId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([applicationId])
+  @@map("notifications")
+}
+
+// ============================================================================
+// SYSTEM CONFIGURATION
+// ============================================================================
+
+model FeeConfiguration {
+  id              String      @id @default(uuid())
+  paymentType     PaymentType @map("payment_type") @unique
+  baseAmount      Decimal     @map("base_amount")
+  gstRate         Decimal     @default(18) @map("gst_rate")
+  discountPercent Decimal     @default(15) @map("discount_percent") // MSE/Startup/Local Supplier
+  description     String?
+  isActive        Boolean     @default(true) @map("is_active")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  @@map("fee_configurations")
+}

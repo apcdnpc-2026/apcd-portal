@@ -1,0 +1,65 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @apcd/database db:generate
+
+      - name: Build packages
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.API_URL }}
+
+      - name: Run database migrations
+        run: pnpm --filter @apcd/database db:push
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Deploy API
+        run: |
+          echo "Deploying API to ${{ inputs.environment }}..."
+          # Add deployment commands for your infrastructure
+          # e.g., SSH, rsync, or cloud provider CLI
+
+      - name: Deploy Web
+        run: |
+          echo "Deploying Web to ${{ inputs.environment }}..."
+          # Add deployment commands for your infrastructure
+
+      - name: Notify deployment
+        if: always()
+        run: |
+          echo "Deployment to ${{ inputs.environment }} completed with status: ${{ job.status }}"

@@ -1,0 +1,121 @@
+export enum ApplicationStatus {
+  DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  QUERIED = 'QUERIED',
+  RESUBMITTED = 'RESUBMITTED',
+  COMMITTEE_REVIEW = 'COMMITTEE_REVIEW',
+  COMMITTEE_QUERIED = 'COMMITTEE_QUERIED',
+  FIELD_VERIFICATION = 'FIELD_VERIFICATION',
+  LAB_TESTING = 'LAB_TESTING',
+  FINAL_REVIEW = 'FINAL_REVIEW',
+  APPROVED = 'APPROVED',
+  PROVISIONALLY_APPROVED = 'PROVISIONALLY_APPROVED',
+  REJECTED = 'REJECTED',
+  WITHDRAWN = 'WITHDRAWN',
+  RENEWAL_PENDING = 'RENEWAL_PENDING',
+  EXPIRED = 'EXPIRED',
+  SUSPENDED = 'SUSPENDED',
+  BLACKLISTED = 'BLACKLISTED',
+}
+
+/** Which roles can trigger which transitions */
+export const STATUS_TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = {
+  [ApplicationStatus.DRAFT]: [ApplicationStatus.SUBMITTED, ApplicationStatus.WITHDRAWN],
+  [ApplicationStatus.SUBMITTED]: [ApplicationStatus.UNDER_REVIEW],
+  [ApplicationStatus.UNDER_REVIEW]: [
+    ApplicationStatus.QUERIED,
+    ApplicationStatus.COMMITTEE_REVIEW,
+    ApplicationStatus.REJECTED,
+  ],
+  [ApplicationStatus.QUERIED]: [ApplicationStatus.RESUBMITTED, ApplicationStatus.WITHDRAWN],
+  [ApplicationStatus.RESUBMITTED]: [ApplicationStatus.UNDER_REVIEW],
+  [ApplicationStatus.COMMITTEE_REVIEW]: [
+    ApplicationStatus.COMMITTEE_QUERIED,
+    ApplicationStatus.FIELD_VERIFICATION,
+    ApplicationStatus.APPROVED,
+    ApplicationStatus.REJECTED,
+  ],
+  [ApplicationStatus.COMMITTEE_QUERIED]: [ApplicationStatus.COMMITTEE_REVIEW],
+  [ApplicationStatus.FIELD_VERIFICATION]: [ApplicationStatus.LAB_TESTING, ApplicationStatus.FINAL_REVIEW],
+  [ApplicationStatus.LAB_TESTING]: [ApplicationStatus.FINAL_REVIEW],
+  [ApplicationStatus.FINAL_REVIEW]: [
+    ApplicationStatus.APPROVED,
+    ApplicationStatus.PROVISIONALLY_APPROVED,
+    ApplicationStatus.REJECTED,
+  ],
+  [ApplicationStatus.APPROVED]: [
+    ApplicationStatus.RENEWAL_PENDING,
+    ApplicationStatus.EXPIRED,
+    ApplicationStatus.SUSPENDED,
+    ApplicationStatus.BLACKLISTED,
+  ],
+  [ApplicationStatus.PROVISIONALLY_APPROVED]: [
+    ApplicationStatus.APPROVED,
+    ApplicationStatus.REJECTED,
+    ApplicationStatus.SUSPENDED,
+  ],
+  [ApplicationStatus.REJECTED]: [],
+  [ApplicationStatus.WITHDRAWN]: [],
+  [ApplicationStatus.RENEWAL_PENDING]: [ApplicationStatus.APPROVED, ApplicationStatus.EXPIRED],
+  [ApplicationStatus.EXPIRED]: [ApplicationStatus.RENEWAL_PENDING],
+  [ApplicationStatus.SUSPENDED]: [ApplicationStatus.APPROVED, ApplicationStatus.BLACKLISTED],
+  [ApplicationStatus.BLACKLISTED]: [],
+};
+
+export const STATUS_LABELS: Record<ApplicationStatus, string> = {
+  [ApplicationStatus.DRAFT]: 'Draft',
+  [ApplicationStatus.SUBMITTED]: 'Submitted',
+  [ApplicationStatus.UNDER_REVIEW]: 'Under Review',
+  [ApplicationStatus.QUERIED]: 'Query Raised',
+  [ApplicationStatus.RESUBMITTED]: 'Resubmitted',
+  [ApplicationStatus.COMMITTEE_REVIEW]: 'Committee Review',
+  [ApplicationStatus.COMMITTEE_QUERIED]: 'Committee Query',
+  [ApplicationStatus.FIELD_VERIFICATION]: 'Field Verification',
+  [ApplicationStatus.LAB_TESTING]: 'Lab Testing',
+  [ApplicationStatus.FINAL_REVIEW]: 'Final Review',
+  [ApplicationStatus.APPROVED]: 'Approved',
+  [ApplicationStatus.PROVISIONALLY_APPROVED]: 'Provisionally Approved',
+  [ApplicationStatus.REJECTED]: 'Rejected',
+  [ApplicationStatus.WITHDRAWN]: 'Withdrawn',
+  [ApplicationStatus.RENEWAL_PENDING]: 'Renewal Pending',
+  [ApplicationStatus.EXPIRED]: 'Expired',
+  [ApplicationStatus.SUSPENDED]: 'Suspended',
+  [ApplicationStatus.BLACKLISTED]: 'Blacklisted',
+};
+
+export const STATUS_COLORS: Record<ApplicationStatus, string> = {
+  [ApplicationStatus.DRAFT]: 'gray',
+  [ApplicationStatus.SUBMITTED]: 'blue',
+  [ApplicationStatus.UNDER_REVIEW]: 'indigo',
+  [ApplicationStatus.QUERIED]: 'orange',
+  [ApplicationStatus.RESUBMITTED]: 'cyan',
+  [ApplicationStatus.COMMITTEE_REVIEW]: 'purple',
+  [ApplicationStatus.COMMITTEE_QUERIED]: 'orange',
+  [ApplicationStatus.FIELD_VERIFICATION]: 'teal',
+  [ApplicationStatus.LAB_TESTING]: 'yellow',
+  [ApplicationStatus.FINAL_REVIEW]: 'violet',
+  [ApplicationStatus.APPROVED]: 'green',
+  [ApplicationStatus.PROVISIONALLY_APPROVED]: 'lime',
+  [ApplicationStatus.REJECTED]: 'red',
+  [ApplicationStatus.WITHDRAWN]: 'gray',
+  [ApplicationStatus.RENEWAL_PENDING]: 'amber',
+  [ApplicationStatus.EXPIRED]: 'red',
+  [ApplicationStatus.SUSPENDED]: 'red',
+  [ApplicationStatus.BLACKLISTED]: 'red',
+};
+
+/** Multi-step form steps */
+export const APPLICATION_STEPS = [
+  { step: 1, label: 'Applicant Details', description: 'Company information (Fields 1-14)' },
+  { step: 2, label: 'Contact Persons', description: 'Commercial & Technical in-charge (Fields 15-16)' },
+  { step: 3, label: 'Financials & Standards', description: 'Turnover, bank solvency, ISO certs (Fields 17-19)' },
+  { step: 4, label: 'Compliance', description: 'Blacklisting status (Field 20)' },
+  { step: 5, label: 'APCD Selection', description: 'APCDs manufactured & seeking empanelment (Fields 21-22)' },
+  { step: 6, label: 'Quality & Feedback', description: 'Grievance system, client testimonials (Fields 23-24)' },
+  { step: 7, label: 'Documents', description: 'Upload all 26 required documents' },
+  { step: 8, label: 'Payment', description: 'Application & empanelment fee payment (Field 25)' },
+  { step: 9, label: 'Declaration & Submit', description: 'Review, declare, and submit' },
+] as const;
+
+export const TOTAL_STEPS = APPLICATION_STEPS.length;
