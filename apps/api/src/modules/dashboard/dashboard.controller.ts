@@ -46,4 +46,11 @@ export class DashboardController {
   async getCommitteeDashboard(@CurrentUser() user: JwtPayload) {
     return this.service.getCommitteeDashboard(user.sub);
   }
+
+  @Get('dealing-hand')
+  @Roles(Role.DEALING_HAND)
+  @ApiOperation({ summary: 'Get Dealing Hand dashboard data' })
+  async getDealingHandDashboard() {
+    return this.service.getDealingHandDashboard();
+  }
 }

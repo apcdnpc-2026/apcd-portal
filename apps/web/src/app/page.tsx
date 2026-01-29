@@ -102,6 +102,11 @@ export default function HomePage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Link href="/empaneled-oems">
+              <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white hover:text-gov-blue">
+                Empaneled OEMs
+              </Button>
+            </Link>
             <Link href="/login">
               <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white hover:text-gov-blue">
                 Login
@@ -385,6 +390,7 @@ export default function HomePage() {
               <ul className="space-y-2 text-sm text-gray-400">
                 <li><Link href="/register" className="hover:text-white">Register as OEM</Link></li>
                 <li><Link href="/login" className="hover:text-white">Login</Link></li>
+                <li><Link href="/empaneled-oems" className="hover:text-white">Empaneled OEMs</Link></li>
                 <li><Link href="#process" className="hover:text-white">Empanelment Process</Link></li>
                 <li><a href="https://cpcb.nic.in" target="_blank" rel="noopener noreferrer" className="hover:text-white">CPCB Website</a></li>
               </ul>

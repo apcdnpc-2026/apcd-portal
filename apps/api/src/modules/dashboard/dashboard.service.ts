@@ -249,6 +249,47 @@ export class DashboardService {
     };
   }
 
+  /**
+   * Get Dealing Hand dashboard data
+   */
+  async getDealingHandDashboard() {
+    const [pendingLabBills, uploadedLabBills, paymentQueries, recentApplications] =
+      await Promise.all([
+        // Applications in lab testing stage (need lab bill upload)
+        this.prisma.application.count({
+          where: { status: ApplicationStatus.LAB_TESTING },
+        }),
+        // Attachments of type lab bill uploaded
+        this.prisma.attachment.count({
+          where: { documentType: 'LAB_TEST_REPORT' },
+        }),
+        // Payments needing verification
+        this.prisma.payment.count({
+          where: { status: PaymentStatus.VERIFICATION_PENDING },
+        }),
+        // Recent lab testing applications
+        this.prisma.application.findMany({
+          where: {
+            status: {
+              in: [ApplicationStatus.LAB_TESTING, ApplicationStatus.FIELD_VERIFICATION],
+            },
+          },
+          include: {
+            oemProfile: { select: { companyName: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        }),
+      ]);
+
+    return {
+      pendingLabBills,
+      uploadedLabBills,
+      paymentQueries,
+      recentApplications,
+    };
+  }
+
   private async getTodayStats() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

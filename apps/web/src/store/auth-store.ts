@@ -5,7 +5,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'OEM' | 'OFFICER' | 'ADMIN' | 'SUPER_ADMIN' | 'COMMITTEE' | 'FIELD_VERIFIER';
+  role: 'OEM' | 'OFFICER' | 'ADMIN' | 'SUPER_ADMIN' | 'COMMITTEE' | 'FIELD_VERIFIER' | 'DEALING_HAND';
   phone?: string;
 }
 

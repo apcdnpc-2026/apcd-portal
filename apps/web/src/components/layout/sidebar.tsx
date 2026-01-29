@@ -14,6 +14,7 @@ import {
   UserCog,
   MapPin,
   MessageSquare,
+  Receipt,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -62,6 +63,11 @@ const menuItems: Record<string, { label: string; href: string; icon: any }[]> = 
     { label: 'Dashboard', href: '/dashboard/field-verifier', icon: LayoutDashboard },
     { label: 'My Assignments', href: '/field-verification/assignments', icon: MapPin },
     { label: 'Completed', href: '/field-verification/completed', icon: ClipboardCheck },
+  ],
+  DEALING_HAND: [
+    { label: 'Dashboard', href: '/dashboard/dealing-hand', icon: LayoutDashboard },
+    { label: 'Lab Bills', href: '/dealing-hand/lab-bills', icon: Receipt },
+    { label: 'Payment Support', href: '/dealing-hand/payments', icon: CreditCard },
   ],
 };
 

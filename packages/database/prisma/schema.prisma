@@ -21,8 +21,9 @@ enum Role {
   OFFICER        // NPC Officer (document verification)
   COMMITTEE      // Committee Member (evaluation & scoring)
   FIELD_VERIFIER // Field Verifier (site inspection)
-  ADMIN          // System Admin
-  SUPER_ADMIN    // Super Admin
+  DEALING_HAND   // Dealing Hand (payment support, lab bill upload)
+  ADMIN          // System Admin (Head)
+  SUPER_ADMIN    // Super Admin (IT Admin)
 }
 
 enum ApplicationStatus {

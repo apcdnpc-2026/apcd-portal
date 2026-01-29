@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Role, PaymentType } from '@prisma/client';
+import { Role, PaymentType, ApplicationStatus, PaymentStatus, CertificateStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 import { PrismaService } from '../../infrastructure/database/prisma.service';
@@ -294,6 +294,117 @@ export class AdminService {
         total,
         pages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  /**
+   * Get MIS report data
+   */
+  async getMisReport() {
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const thisYearStart = new Date(now.getFullYear(), 0, 1);
+
+    const [
+      applicationsByStatus,
+      applicationsByMonth,
+      paymentsByMonth,
+      certificatesByStatus,
+      usersByRole,
+      revenueThisMonth,
+      revenueLastMonth,
+      revenueThisYear,
+      totalApplications,
+      stateWiseApplications,
+      apcdTypeWiseApplications,
+    ] = await Promise.all([
+      this.prisma.application.groupBy({ by: ['status'], _count: true }),
+      this.prisma.application.groupBy({
+        by: ['status'],
+        where: { createdAt: { gte: thisMonthStart } },
+        _count: true,
+      }),
+      this.prisma.payment.groupBy({
+        by: ['status'],
+        where: { createdAt: { gte: thisMonthStart } },
+        _count: true,
+        _sum: { totalAmount: true },
+      }),
+      this.prisma.certificate.groupBy({ by: ['status'], _count: true }),
+      this.prisma.user.groupBy({ by: ['role'], _count: true }),
+      this.prisma.payment.aggregate({
+        where: { status: PaymentStatus.VERIFIED, createdAt: { gte: thisMonthStart } },
+        _sum: { totalAmount: true },
+        _count: true,
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          status: PaymentStatus.VERIFIED,
+          createdAt: { gte: lastMonthStart, lt: thisMonthStart },
+        },
+        _sum: { totalAmount: true },
+        _count: true,
+      }),
+      this.prisma.payment.aggregate({
+        where: { status: PaymentStatus.VERIFIED, createdAt: { gte: thisYearStart } },
+        _sum: { totalAmount: true },
+        _count: true,
+      }),
+      this.prisma.application.count(),
+      this.prisma.oemProfile.groupBy({ by: ['state'], _count: true, orderBy: { _count: { state: 'desc' } } }),
+      this.prisma.applicationApcd.groupBy({
+        by: ['apcdTypeId'],
+        where: { seekingEmpanelment: true },
+        _count: true,
+      }),
+    ]);
+
+    // Fetch APCD type names for the grouped data
+    const apcdTypeIds = apcdTypeWiseApplications.map((a) => a.apcdTypeId);
+    const apcdTypes = await this.prisma.aPCDType.findMany({
+      where: { id: { in: apcdTypeIds } },
+      select: { id: true, category: true, subType: true },
+    });
+    const apcdTypeMap = new Map(apcdTypes.map((t) => [t.id, t]));
+
+    return {
+      summary: {
+        totalApplications,
+        revenueThisMonth: revenueThisMonth._sum.totalAmount || 0,
+        revenueLastMonth: revenueLastMonth._sum.totalAmount || 0,
+        revenueThisYear: revenueThisYear._sum.totalAmount || 0,
+        paymentsThisMonth: revenueThisMonth._count,
+      },
+      applicationsByStatus: applicationsByStatus.reduce(
+        (acc, item) => ({ ...acc, [item.status]: item._count }),
+        {} as Record<string, number>,
+      ),
+      applicationsThisMonth: applicationsByMonth.reduce(
+        (acc, item) => ({ ...acc, [item.status]: item._count }),
+        {} as Record<string, number>,
+      ),
+      paymentsSummary: paymentsByMonth.map((p) => ({
+        status: p.status,
+        count: p._count,
+        amount: p._sum.totalAmount || 0,
+      })),
+      certificatesByStatus: certificatesByStatus.reduce(
+        (acc, item) => ({ ...acc, [item.status]: item._count }),
+        {} as Record<string, number>,
+      ),
+      usersByRole: usersByRole.reduce(
+        (acc, item) => ({ ...acc, [item.role]: item._count }),
+        {} as Record<string, number>,
+      ),
+      stateWiseApplications: stateWiseApplications
+        .filter((s) => s.state)
+        .map((s) => ({ state: s.state, count: s._count })),
+      apcdTypeWiseApplications: apcdTypeWiseApplications.map((a) => ({
+        category: apcdTypeMap.get(a.apcdTypeId)?.category || 'Unknown',
+        subType: apcdTypeMap.get(a.apcdTypeId)?.subType || 'Unknown',
+        count: a._count,
+      })),
     };
   }
 }

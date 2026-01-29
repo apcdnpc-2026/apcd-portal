@@ -78,6 +78,7 @@ export default function LoginPage() {
         SUPER_ADMIN: '/dashboard/admin',
         COMMITTEE: '/dashboard/committee',
         FIELD_VERIFIER: '/dashboard/field-verifier',
+        DEALING_HAND: '/dashboard/dealing-hand',
       };
 
       router.replace(roleRoutes[authData.user.role] || '/dashboard');

@@ -104,4 +104,11 @@ export class AdminController {
       limit ? parseInt(limit, 10) : 50,
     );
   }
+
+  // MIS Reports
+  @Get('reports/mis')
+  @ApiOperation({ summary: 'Get MIS report data' })
+  async getMisReport() {
+    return this.service.getMisReport();
+  }
 }

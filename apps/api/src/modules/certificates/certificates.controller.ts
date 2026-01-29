@@ -24,6 +24,13 @@ import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.de
 export class CertificatesController {
   constructor(private service: CertificatesService) {}
 
+  @Get('empaneled-oems')
+  @Public()
+  @ApiOperation({ summary: 'Get list of empaneled OEMs (public)' })
+  async getEmpaneledOems() {
+    return this.service.getEmpaneledOems();
+  }
+
   @Get('verify/:certificateNumber')
   @Public()
   @ApiOperation({ summary: 'Verify certificate by number (public)' })

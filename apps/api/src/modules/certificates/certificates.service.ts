@@ -128,6 +128,51 @@ export class CertificatesService {
   }
 
   /**
+   * Get list of empaneled OEMs (public)
+   */
+  async getEmpaneledOems() {
+    const certificates = await this.prisma.certificate.findMany({
+      where: {
+        status: CertificateStatus.ACTIVE,
+        validUntil: { gte: new Date() },
+      },
+      include: {
+        application: {
+          include: {
+            oemProfile: {
+              select: {
+                companyName: true,
+                fullAddress: true,
+                state: true,
+                contactNo: true,
+              },
+            },
+            applicationApcds: {
+              where: { seekingEmpanelment: true },
+              include: { apcdType: true },
+            },
+          },
+        },
+      },
+      orderBy: { issuedDate: 'desc' },
+    });
+
+    return certificates.map((cert) => ({
+      certificateNumber: cert.certificateNumber,
+      companyName: cert.application.oemProfile?.companyName,
+      address: cert.application.oemProfile?.fullAddress,
+      state: cert.application.oemProfile?.state,
+      contact: cert.application.oemProfile?.contactNo,
+      apcdTypes: cert.application.applicationApcds.map((a) => ({
+        category: a.apcdType.category,
+        subType: a.apcdType.subType,
+      })),
+      issuedDate: cert.issuedDate,
+      validUntil: cert.validUntil,
+    }));
+  }
+
+  /**
    * Get certificate by certificate number (for public verification)
    */
   async verifyCertificate(certificateNumber: string) {
