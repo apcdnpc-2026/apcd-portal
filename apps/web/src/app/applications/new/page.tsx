@@ -9,6 +9,9 @@ import { useState, useEffect } from 'react';
 import { Step2ApcdTypes } from '@/components/application/step2-apcd-types';
 import { Step3Documents } from '@/components/application/step3-documents';
 import { Step4Review } from '@/components/application/step4-review';
+import { Step5InstallationExperience } from '@/components/application/step5-installation-experience';
+import { Step6StaffDetails } from '@/components/application/step6-staff-details';
+import { Step7FieldVerificationSites } from '@/components/application/step7-field-verification-sites';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,9 +19,12 @@ import { useToast } from '@/components/ui/use-toast';
 import { apiPost, apiGet, apiPut } from '@/lib/api';
 
 const STEPS = [
-  { id: 1, title: 'Select APCD Types', component: Step2ApcdTypes },
+  { id: 1, title: 'APCD Types', component: Step2ApcdTypes },
   { id: 2, title: 'Documents', component: Step3Documents },
-  { id: 3, title: 'Review & Submit', component: Step4Review },
+  { id: 3, title: 'Experience', component: Step5InstallationExperience },
+  { id: 4, title: 'Staff', component: Step6StaffDetails },
+  { id: 5, title: 'Sites', component: Step7FieldVerificationSites },
+  { id: 6, title: 'Review & Submit', component: Step4Review },
 ];
 
 export default function NewApplicationPage() {

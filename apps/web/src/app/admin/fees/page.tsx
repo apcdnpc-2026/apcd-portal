@@ -1,20 +1,65 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { CreditCard } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { CreditCard, Pencil } from 'lucide-react';
+import { useState } from 'react';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { apiGet } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/components/ui/use-toast';
+import { apiGet, apiPut } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
 export default function AdminFeesPage() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingFee, setEditingFee] = useState<any>(null);
+  const [newAmount, setNewAmount] = useState('');
+
   const { data: response, isLoading } = useQuery({
     queryKey: ['admin-fees'],
     queryFn: () => apiGet<any>('/admin/fees'),
   });
   const fees = response?.data || response || [];
+
+  const updateMutation = useMutation({
+    mutationFn: ({ paymentType, baseAmount }: { paymentType: string; baseAmount: number }) =>
+      apiPut(`/admin/fees/${paymentType}`, { baseAmount }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-fees'] });
+      setEditDialogOpen(false);
+      toast({ title: 'Fee updated successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Failed to update fee', variant: 'destructive' });
+    },
+  });
+
+  const handleEdit = (fee: any) => {
+    setEditingFee(fee);
+    setNewAmount(String(fee.baseAmount));
+    setEditDialogOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!editingFee || !newAmount) return;
+    updateMutation.mutate({
+      paymentType: editingFee.paymentType,
+      baseAmount: parseFloat(newAmount),
+    });
+  };
 
   if (isLoading) {
     return (
@@ -38,10 +83,15 @@ export default function AdminFeesPage() {
           {(fees as any[]).map((fee: any) => (
             <Card key={fee.paymentType}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <CreditCard className="h-4 w-4" />
-                  {fee.paymentType?.replace(/_/g, ' ')}
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CreditCard className="h-4 w-4" />
+                    {fee.paymentType?.replace(/_/g, ' ')}
+                  </CardTitle>
+                  <Button variant="ghost" size="sm" onClick={() => handleEdit(fee)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex justify-between">
@@ -62,10 +112,58 @@ export default function AdminFeesPage() {
                     {formatCurrency(fee.baseAmount * (1 + fee.gstRate / 100))}
                   </span>
                 </div>
+                {fee.description && (
+                  <p className="text-xs text-muted-foreground mt-2">{fee.description}</p>
+                )}
               </CardContent>
             </Card>
           ))}
         </div>
+
+        {/* Edit Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Fee</DialogTitle>
+              <DialogDescription>
+                Update the base amount for {editingFee?.paymentType?.replace(/_/g, ' ')}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Current Amount</Label>
+                <p className="text-lg font-bold">{formatCurrency(editingFee?.baseAmount || 0)}</p>
+              </div>
+              <div>
+                <Label>New Base Amount (in ₹)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={newAmount}
+                  onChange={(e) => setNewAmount(e.target.value)}
+                  placeholder="Enter new amount"
+                  className="mt-1"
+                />
+                {newAmount && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    With GST ({editingFee?.gstRate || 18}%):{' '}
+                    {formatCurrency(
+                      parseFloat(newAmount) * (1 + (editingFee?.gstRate || 18) / 100),
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={updateMutation.isPending || !newAmount}>
+                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

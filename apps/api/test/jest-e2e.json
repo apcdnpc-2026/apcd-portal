@@ -1,0 +1,14 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.ts$": "ts-jest"
+  },
+  "testEnvironment": "node",
+  "moduleNameMapper": {
+    "^@apcd/database(.*)$": "<rootDir>/../../packages/database/index.ts",
+    "^@apcd/shared$": "<rootDir>/../../packages/shared/src/index.ts"
+  },
+  "testTimeout": 30000
+}

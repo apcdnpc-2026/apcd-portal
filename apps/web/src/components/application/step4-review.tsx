@@ -11,6 +11,7 @@ import {
   XCircle,
   Loader2,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -62,7 +63,8 @@ const FACTORY_PHOTO_SLOTS = [
   { slot: 'FINISHED_GOODS', label: 'Finished Goods Area' },
 ];
 
-export function Step4Review({ applicationId, onSave, onNext }: Step4Props) {
+export function Step4Review({ applicationId, onSave }: Step4Props) {
+  const router = useRouter();
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -117,7 +119,8 @@ export function Step4Review({ applicationId, onSave, onNext }: Step4Props) {
       // Submit application
       await apiPost(`/applications/${applicationId}/submit`);
 
-      onNext();
+      // Redirect to payment checkout
+      router.push(`/payments/checkout/${applicationId}`);
     } catch (err: any) {
       const msg =
         err.response?.data?.message ||

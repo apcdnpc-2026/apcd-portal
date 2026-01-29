@@ -4,18 +4,40 @@ import { useQuery } from '@tanstack/react-query';
 import { Award, Download } from 'lucide-react';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { apiGet } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
+import { api, apiGet } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
 export default function CertificatesPage() {
+  const { toast } = useToast();
+
   const { data: response, isLoading } = useQuery({
     queryKey: ['my-certificates'],
     queryFn: () => apiGet<any>('/certificates/my-certificates'),
   });
   const certificates = response?.data || response || [];
+
+  const handleDownload = async (certId: string, certNumber: string) => {
+    try {
+      const response = await api.get(`/certificates/${certId}/download`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Certificate_${certNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: 'Failed to download certificate', variant: 'destructive' });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -50,14 +72,24 @@ export default function CertificatesPage() {
                     <div>
                       <p className="text-lg font-semibold">{cert.certificateNumber}</p>
                       <p className="text-sm text-muted-foreground">
-                        Issued: {formatDate(cert.issuedDate)} &bull; Valid until: {formatDate(cert.validUntil)}
+                        Issued: {formatDate(cert.issuedDate)} &bull; Valid until:{' '}
+                        {formatDate(cert.validUntil)}
                       </p>
+                      {cert.certificateType && (
+                        <Badge variant="outline" className="mt-1">
+                          {cert.certificateType?.replace(/_/g, ' ')}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       <Badge variant={cert.status === 'ACTIVE' ? 'success' : 'destructive'}>
                         {cert.status}
                       </Badge>
-                      <Button size="sm" variant="outline">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownload(cert.id, cert.certificateNumber)}
+                      >
                         <Download className="h-4 w-4 mr-1" /> Download
                       </Button>
                     </div>

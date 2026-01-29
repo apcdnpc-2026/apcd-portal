@@ -4,6 +4,8 @@ import { NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 
+import { EmailService } from './channels/email.service';
+
 interface SendNotificationDto {
   userId: string;
   applicationId?: string;
@@ -19,6 +21,7 @@ export class NotificationsService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private emailService: EmailService,
   ) {}
 
   /**
@@ -56,11 +59,7 @@ export class NotificationsService {
   /**
    * Send application status notification
    */
-  async notifyApplicationStatusChange(
-    applicationId: string,
-    newStatus: string,
-    remarks?: string,
-  ) {
+  async notifyApplicationStatusChange(applicationId: string, newStatus: string, remarks?: string) {
     const application = await this.prisma.application.findUnique({
       where: { id: applicationId },
       include: {
@@ -71,7 +70,10 @@ export class NotificationsService {
 
     if (!application) return;
 
-    const statusMessages: Record<string, { type: NotificationType; title: string; message: string }> = {
+    const statusMessages: Record<
+      string,
+      { type: NotificationType; title: string; message: string }
+    > = {
       SUBMITTED: {
         type: NotificationType.APPLICATION_SUBMITTED,
         title: 'Application Submitted',
@@ -185,9 +187,11 @@ export class NotificationsService {
     return expiringCerts.length;
   }
 
-  // Placeholder email sender
   private async sendEmail(to: string, subject: string, body: string) {
-    this.logger.log(`[EMAIL] To: ${to}, Subject: ${subject}`);
-    // TODO: Implement with nodemailer or email service provider
+    try {
+      await this.emailService.sendEmail(to, subject, body);
+    } catch (error) {
+      this.logger.error(`Email send failed: ${error}`);
+    }
   }
 }

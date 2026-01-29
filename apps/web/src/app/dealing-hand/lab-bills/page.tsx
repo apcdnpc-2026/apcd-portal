@@ -1,21 +1,62 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { Receipt } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Receipt, Upload } from 'lucide-react';
+import { useState } from 'react';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { apiGet } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/components/ui/use-toast';
+import { apiGet, uploadFile } from '@/lib/api';
 
 export default function LabBillsPage() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<any>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   const { data: response, isLoading } = useQuery({
     queryKey: ['lab-bills'],
     queryFn: () => apiGet<any>('/dashboard/dealing-hand'),
   });
   const applications = response?.data?.recentApplications || response?.recentApplications || [];
+
+  const handleUploadClick = (app: any) => {
+    setSelectedApp(app);
+    setFile(null);
+    setUploadDialogOpen(true);
+  };
+
+  const handleUpload = async () => {
+    if (!file || !selectedApp) return;
+
+    setUploading(true);
+    try {
+      await uploadFile(`/attachments/${selectedApp.id}/upload`, file, undefined, {
+        documentType: 'LAB_TEST_REPORT',
+      });
+      queryClient.invalidateQueries({ queryKey: ['lab-bills'] });
+      setUploadDialogOpen(false);
+      toast({ title: 'Lab bill uploaded successfully' });
+    } catch {
+      toast({ title: 'Failed to upload lab bill', variant: 'destructive' });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -55,7 +96,9 @@ export default function LabBillsPage() {
                       <Badge variant={app.status === 'LAB_TESTING' ? 'warning' : 'default'}>
                         {app.status?.replace(/_/g, ' ')}
                       </Badge>
-                      <Button size="sm">Upload Bill</Button>
+                      <Button size="sm" onClick={() => handleUploadClick(app)}>
+                        <Upload className="h-4 w-4 mr-1" /> Upload Bill
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
@@ -63,6 +106,49 @@ export default function LabBillsPage() {
             ))}
           </div>
         )}
+
+        {/* Upload Dialog */}
+        <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Upload Lab Bill</DialogTitle>
+              <DialogDescription>
+                Upload lab test report/bill for application {selectedApp?.applicationNumber}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Application</Label>
+                <p className="font-medium">{selectedApp?.applicationNumber}</p>
+                <p className="text-sm text-muted-foreground">
+                  {selectedApp?.oemProfile?.companyName}
+                </p>
+              </div>
+              <div>
+                <Label>Select File *</Label>
+                <input
+                  type="file"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  accept=".pdf,.jpg,.jpeg,.png,.xls,.xlsx"
+                  className="mt-1 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                />
+                {file && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpload} disabled={uploading || !file}>
+                {uploading ? 'Uploading...' : 'Upload'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

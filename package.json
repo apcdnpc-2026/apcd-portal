@@ -9,6 +9,7 @@
     "lint": "turbo lint",
     "type-check": "turbo type-check",
     "test": "turbo test",
+    "test:e2e": "playwright test",
     "db:generate": "turbo db:generate",
     "db:migrate": "turbo db:migrate",
     "db:seed": "turbo db:seed",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",
     "@commitlint/config-conventional": "^19.6.0",
+    "@playwright/test": "^1.58.0",
     "husky": "^9.1.0",
     "lint-staged": "^15.2.0",
     "prettier": "^3.4.0",
