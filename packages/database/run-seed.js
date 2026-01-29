@@ -19,11 +19,16 @@ async function main() {
     const sqlPath = path.join(__dirname, 'prisma', 'seed.sql');
     const sql = fs.readFileSync(sqlPath, 'utf8');
 
-    // Split by semicolons and execute each statement
-    const statements = sql
+    // Strip comment lines, then split by semicolons
+    const cleanedSql = sql
+      .split('\n')
+      .filter(line => !line.trim().startsWith('--'))
+      .join('\n');
+
+    const statements = cleanedSql
       .split(';')
       .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
+      .filter(s => s.length > 0);
 
     for (const stmt of statements) {
       try {
