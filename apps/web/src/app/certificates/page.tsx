@@ -35,7 +35,11 @@ export default function CertificatesPage() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch {
-      toast({ title: 'Failed to download certificate', variant: 'destructive' });
+      toast({
+        title: 'Download Failed',
+        description: 'Failed to download certificate. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 

@@ -1,20 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
+import { apiPost, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth-store';
-import { apiPost } from '@/lib/api';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -82,12 +89,18 @@ export default function LoginPage() {
       };
 
       router.replace(roleRoutes[authData.user.role] || '/dashboard');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Invalid credentials';
+    } catch (error: unknown) {
+      const status = (error as any)?.response?.status;
+      const title =
+        status === 401
+          ? 'Invalid Credentials'
+          : status === 429
+            ? 'Too Many Attempts'
+            : 'Login Failed';
       toast({
         variant: 'destructive',
-        title: 'Login Failed',
-        description: errorMessage,
+        title,
+        description: getApiErrorMessage(error, 'Login failed. Please try again.'),
       });
     } finally {
       setIsLoading(false);
@@ -128,9 +141,7 @@ export default function LoginPage() {
                   placeholder="Enter your email"
                   {...register('email')}
                 />
-                {errors.email && (
-                  <p className="text-sm text-red-500">{errors.email.message}</p>
-                )}
+                {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
               </div>
 
               <div className="space-y-2">
@@ -188,10 +199,10 @@ export default function LoginPage() {
       {/* Footer */}
       <footer className="bg-gray-800 text-white py-4">
         <div className="container mx-auto px-4 text-center text-sm">
-          <p>&copy; {new Date().getFullYear()} National Productivity Council. All rights reserved.</p>
-          <p className="text-gray-400 mt-1">
-            For CPCB - Central Pollution Control Board
+          <p>
+            &copy; {new Date().getFullYear()} National Productivity Council. All rights reserved.
           </p>
+          <p className="text-gray-400 mt-1">For CPCB - Central Pollution Control Board</p>
         </div>
       </footer>
     </div>

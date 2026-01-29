@@ -1,20 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
+import { apiPost, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth-store';
-import { apiPost } from '@/lib/api';
 
 const registerSchema = z
   .object({
@@ -89,12 +96,18 @@ export default function RegisterPage() {
 
       // Redirect to OEM dashboard to start application
       router.push('/dashboard/oem');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Something went wrong';
+    } catch (error: unknown) {
+      const status = (error as any)?.response?.status;
+      const title =
+        status === 409
+          ? 'Email Already Registered'
+          : status === 400
+            ? 'Invalid Registration Details'
+            : 'Registration Failed';
       toast({
         variant: 'destructive',
-        title: 'Registration Failed',
-        description: Array.isArray(errorMessage) ? errorMessage[0] : errorMessage,
+        title,
+        description: getApiErrorMessage(error, 'Registration failed. Please try again.'),
       });
     } finally {
       setIsLoading(false);
@@ -132,7 +145,8 @@ export default function RegisterPage() {
             </Link>
             <CardTitle className="text-2xl">OEM Registration</CardTitle>
             <CardDescription>
-              Register as an Air Pollution Control Device manufacturer to start your empanelment application
+              Register as an Air Pollution Control Device manufacturer to start your empanelment
+              application
             </CardDescription>
           </CardHeader>
 
@@ -141,11 +155,7 @@ export default function RegisterPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First Name</Label>
-                  <Input
-                    id="firstName"
-                    placeholder="Enter first name"
-                    {...register('firstName')}
-                  />
+                  <Input id="firstName" placeholder="Enter first name" {...register('firstName')} />
                   {errors.firstName && (
                     <p className="text-sm text-red-500">{errors.firstName.message}</p>
                   )}
@@ -153,11 +163,7 @@ export default function RegisterPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last Name</Label>
-                  <Input
-                    id="lastName"
-                    placeholder="Enter last name"
-                    {...register('lastName')}
-                  />
+                  <Input id="lastName" placeholder="Enter last name" {...register('lastName')} />
                   {errors.lastName && (
                     <p className="text-sm text-red-500">{errors.lastName.message}</p>
                   )}
@@ -172,9 +178,7 @@ export default function RegisterPage() {
                   placeholder="Enter your email"
                   {...register('email')}
                 />
-                {errors.email && (
-                  <p className="text-sm text-red-500">{errors.email.message}</p>
-                )}
+                {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
               </div>
 
               <div className="space-y-2">
@@ -185,9 +189,7 @@ export default function RegisterPage() {
                   placeholder="10-digit mobile number"
                   {...register('phone')}
                 />
-                {errors.phone && (
-                  <p className="text-sm text-red-500">{errors.phone.message}</p>
-                )}
+                {errors.phone && <p className="text-sm text-red-500">{errors.phone.message}</p>}
               </div>
 
               <div className="space-y-2">
@@ -259,7 +261,9 @@ export default function RegisterPage() {
       {/* Footer */}
       <footer className="bg-gray-800 text-white py-4">
         <div className="container mx-auto px-4 text-center text-sm">
-          <p>&copy; {new Date().getFullYear()} National Productivity Council. All rights reserved.</p>
+          <p>
+            &copy; {new Date().getFullYear()} National Productivity Council. All rights reserved.
+          </p>
         </div>
       </footer>
     </div>

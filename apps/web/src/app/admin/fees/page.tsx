@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { apiGet, apiPut } from '@/lib/api';
+import { apiGet, apiPut, getApiErrorMessage } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
 export default function AdminFeesPage() {
@@ -42,8 +42,12 @@ export default function AdminFeesPage() {
       setEditDialogOpen(false);
       toast({ title: 'Fee updated successfully' });
     },
-    onError: () => {
-      toast({ title: 'Failed to update fee', variant: 'destructive' });
+    onError: (error: unknown) => {
+      toast({
+        title: 'Fee Update Failed',
+        description: getApiErrorMessage(error, 'Failed to update fee. Please try again.'),
+        variant: 'destructive',
+      });
     },
   });
 

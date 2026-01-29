@@ -1,21 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Save, Building2, MapPin, FileText, CheckCircle } from 'lucide-react';
+import { Loader2, Save, Building2, MapPin, FileText } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { apiGet, apiPost, apiPut } from '@/lib/api';
+import { apiGet, apiPost, apiPut, getApiErrorMessage } from '@/lib/api';
 
 const FIRM_TYPES = [
   { value: 'PROPRIETARY', label: 'Proprietary' },
@@ -40,10 +46,12 @@ const profileSchema = z.object({
   country: z.string().default('India'),
   pinCode: z.string().regex(/^\d{6}$/, 'PIN code must be 6 digits'),
   contactNo: z.string().regex(/^[6-9]\d{9}$/, 'Invalid phone (10 digits, starting with 6-9)'),
-  gstRegistrationNo: z.string().regex(
-    /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
-    'Invalid GST number (e.g. 06AABCU9603R1ZM)'
-  ),
+  gstRegistrationNo: z
+    .string()
+    .regex(
+      /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+      'Invalid GST number (e.g. 06AABCU9603R1ZM)',
+    ),
   panNo: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Invalid PAN (e.g. AABCU9603R)'),
   firmType: z.string().min(1, 'Firm type is required'),
   firmAreaSqm: z.coerce.number().min(0).optional(),
@@ -105,10 +113,26 @@ export default function ProfilePage() {
     if (profile) {
       setHasProfile(true);
       const fields = [
-        'companyName', 'fullAddress', 'state', 'country', 'pinCode', 'contactNo',
-        'gstRegistrationNo', 'panNo', 'firmType', 'firmAreaSqm', 'employeeCount',
-        'gpsLatitude', 'gpsLongitude', 'firmSize', 'udyamRegistrationNo',
-        'isMSE', 'isStartup', 'isLocalSupplier', 'localContentPercent', 'dpiitRecognitionNo'
+        'companyName',
+        'fullAddress',
+        'state',
+        'country',
+        'pinCode',
+        'contactNo',
+        'gstRegistrationNo',
+        'panNo',
+        'firmType',
+        'firmAreaSqm',
+        'employeeCount',
+        'gpsLatitude',
+        'gpsLongitude',
+        'firmSize',
+        'udyamRegistrationNo',
+        'isMSE',
+        'isStartup',
+        'isLocalSupplier',
+        'localContentPercent',
+        'dpiitRecognitionNo',
       ];
       fields.forEach((field) => {
         if (profile[field] !== undefined && profile[field] !== null) {
@@ -122,14 +146,17 @@ export default function ProfilePage() {
     mutationFn: (data: ProfileForm) => apiPost<any>('/oem-profile', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['oem-profile'] });
-      toast({ title: 'Profile Created', description: 'Your company profile has been saved successfully.' });
+      toast({
+        title: 'Profile Created',
+        description: 'Your company profile has been saved successfully.',
+      });
       setHasProfile(true);
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: error.response?.data?.message || 'Failed to create profile',
+        title: 'Profile Creation Failed',
+        description: getApiErrorMessage(error, 'Failed to create profile. Please try again.'),
       });
     },
   });
@@ -140,11 +167,11 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ['oem-profile'] });
       toast({ title: 'Profile Updated', description: 'Your company profile has been updated.' });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: error.response?.data?.message || 'Failed to update profile',
+        title: 'Profile Update Failed',
+        description: getApiErrorMessage(error, 'Failed to update profile. Please try again.'),
       });
     },
   });
@@ -177,7 +204,9 @@ export default function ProfilePage() {
         <div>
           <h1 className="text-2xl font-bold">Company Profile</h1>
           <p className="text-muted-foreground">
-            {hasProfile ? 'Update your company details' : 'Complete your company profile to start an application'}
+            {hasProfile
+              ? 'Update your company details'
+              : 'Complete your company profile to start an application'}
           </p>
         </div>
 
@@ -247,9 +276,7 @@ export default function ProfilePage() {
                 <div className="space-y-2">
                   <Label htmlFor="panNo">PAN Number *</Label>
                   <Input id="panNo" {...register('panNo')} placeholder="AABCU9603R" />
-                  {errors.panNo && (
-                    <p className="text-sm text-red-500">{errors.panNo.message}</p>
-                  )}
+                  {errors.panNo && <p className="text-sm text-red-500">{errors.panNo.message}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -314,9 +341,7 @@ export default function ProfilePage() {
                 <div className="space-y-2">
                   <Label htmlFor="state">State *</Label>
                   <Input id="state" {...register('state')} />
-                  {errors.state && (
-                    <p className="text-sm text-red-500">{errors.state.message}</p>
-                  )}
+                  {errors.state && <p className="text-sm text-red-500">{errors.state.message}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -371,16 +396,10 @@ export default function ProfilePage() {
             <CardContent className="space-y-4">
               <div className="space-y-3">
                 <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    {...register('isMSE')}
-                    className="rounded h-4 w-4"
-                  />
+                  <input type="checkbox" {...register('isMSE')} className="rounded h-4 w-4" />
                   <div>
                     <p className="font-medium">Micro or Small Enterprise (MSE)</p>
-                    <p className="text-sm text-muted-foreground">
-                      Registered under MSME Act
-                    </p>
+                    <p className="text-sm text-muted-foreground">Registered under MSME Act</p>
                   </div>
                 </label>
 
@@ -396,11 +415,7 @@ export default function ProfilePage() {
                 )}
 
                 <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    {...register('isStartup')}
-                    className="rounded h-4 w-4"
-                  />
+                  <input type="checkbox" {...register('isStartup')} className="rounded h-4 w-4" />
                   <div>
                     <p className="font-medium">DPIIT Recognized Startup</p>
                     <p className="text-sm text-muted-foreground">
@@ -412,10 +427,7 @@ export default function ProfilePage() {
                 {isStartup && (
                   <div className="ml-7 space-y-2">
                     <Label htmlFor="dpiitRecognitionNo">DPIIT Recognition No.</Label>
-                    <Input
-                      id="dpiitRecognitionNo"
-                      {...register('dpiitRecognitionNo')}
-                    />
+                    <Input id="dpiitRecognitionNo" {...register('dpiitRecognitionNo')} />
                   </div>
                 )}
 
@@ -455,8 +467,11 @@ export default function ProfilePage() {
             <Button type="button" variant="outline" onClick={() => router.push('/dashboard/oem')}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting || createMutation.isPending || updateMutation.isPending}>
-              {(isSubmitting || createMutation.isPending || updateMutation.isPending) ? (
+            <Button
+              type="submit"
+              disabled={isSubmitting || createMutation.isPending || updateMutation.isPending}
+            >
+              {isSubmitting || createMutation.isPending || updateMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Saving...

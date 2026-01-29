@@ -12,7 +12,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // CORS — allow all origins temporarily to debug Railway deployment
+  // CORS
   const appUrl = configService.get<string>('APP_URL', 'http://localhost:3000');
   const allowedOrigins = appUrl
     .split(',')
@@ -20,19 +20,16 @@ async function bootstrap() {
     .filter(Boolean);
 
   app.enableCors({
-    origin: true,
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
   });
 
-  // Security — after CORS to avoid interfering with preflight
+  // Security
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
-      crossOriginOpenerPolicy: false,
     }),
   );
 

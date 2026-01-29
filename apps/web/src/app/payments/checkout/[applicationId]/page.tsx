@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
-import { apiGet, apiPost, uploadFile } from '@/lib/api';
+import { apiGet, apiPost, uploadFile, getApiErrorMessage } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
 declare global {
@@ -90,8 +90,15 @@ export default function PaymentCheckoutPage() {
       toast({ title: 'Payment successful!' });
       router.push('/applications');
     },
-    onError: () => {
-      toast({ title: 'Payment verification failed', variant: 'destructive' });
+    onError: (error: unknown) => {
+      toast({
+        title: 'Payment Verification Failed',
+        description: getApiErrorMessage(
+          error,
+          'Payment verification failed. Please contact support.',
+        ),
+        variant: 'destructive',
+      });
     },
   });
 
@@ -113,8 +120,12 @@ export default function PaymentCheckoutPage() {
       toast({ title: 'Payment recorded. Pending officer verification.' });
       router.push('/applications');
     },
-    onError: () => {
-      toast({ title: 'Failed to record payment', variant: 'destructive' });
+    onError: (error: unknown) => {
+      toast({
+        title: 'Payment Recording Failed',
+        description: getApiErrorMessage(error, 'Failed to record payment. Please try again.'),
+        variant: 'destructive',
+      });
     },
   });
 
@@ -171,9 +182,12 @@ export default function PaymentCheckoutPage() {
         setProcessing(false);
       });
       rzp.open();
-    } catch (error: any) {
-      const msg = error?.response?.data?.message || 'Failed to initiate payment';
-      toast({ title: msg, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({
+        title: 'Payment Initiation Failed',
+        description: getApiErrorMessage(error, 'Failed to initiate payment. Please try again.'),
+        variant: 'destructive',
+      });
       setProcessing(false);
     }
   };

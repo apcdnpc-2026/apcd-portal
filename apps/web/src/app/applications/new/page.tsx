@@ -16,7 +16,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { apiPost, apiGet, apiPut } from '@/lib/api';
+import { apiPost, apiGet, apiPut, getApiErrorMessage } from '@/lib/api';
 
 const STEPS = [
   { id: 1, title: 'APCD Types', component: Step2ApcdTypes },
@@ -71,11 +71,11 @@ export default function NewApplicationPage() {
       setApplicationId(response.data.id);
       toast({ title: 'Application created', description: 'Your application has been started.' });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: error.response?.data?.message || 'Failed to create application',
+        title: 'Application Creation Failed',
+        description: getApiErrorMessage(error, 'Failed to create application. Please try again.'),
       });
     },
   });
@@ -87,11 +87,11 @@ export default function NewApplicationPage() {
     onSuccess: () => {
       toast({ title: 'Application saved', description: 'Your changes have been saved.' });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: error.response?.data?.message || 'Failed to save application',
+        title: 'Save Failed',
+        description: getApiErrorMessage(error, 'Failed to save application. Please try again.'),
       });
     },
   });

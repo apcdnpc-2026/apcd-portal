@@ -52,7 +52,11 @@ export default function LabBillsPage() {
       setUploadDialogOpen(false);
       toast({ title: 'Lab bill uploaded successfully' });
     } catch {
-      toast({ title: 'Failed to upload lab bill', variant: 'destructive' });
+      toast({
+        title: 'Upload Failed',
+        description: 'Failed to upload lab bill. Please check the file and try again.',
+        variant: 'destructive',
+      });
     } finally {
       setUploading(false);
     }
