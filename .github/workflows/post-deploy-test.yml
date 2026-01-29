@@ -1,7 +1,13 @@
 name: Post-Deployment Tests
 
 on:
-  # Run manually against any deployed environment
+  # ── Automatic: runs after every push to master ──
+  # Railway auto-deploys on push, so we wait for it to finish
+  # then run smoke tests against the live Railway URLs.
+  push:
+    branches: [master, main]
+
+  # ── Manual: run against any deployed environment ──
   workflow_dispatch:
     inputs:
       api_url:
@@ -13,17 +19,23 @@ on:
         required: true
         type: string
 
-  # Trigger automatically after deploy workflow completes
+  # ── Chained: auto-run after Deploy workflow succeeds ──
   workflow_run:
     workflows: ['Deploy']
     types: [completed]
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SETUP: Configure these as GitHub Repository Variables (Settings > Variables):
+#   API_URL  → https://your-api-service.up.railway.app
+#   WEB_URL  → https://your-web-service.up.railway.app
+# ─────────────────────────────────────────────────────────────────────────────
+
 jobs:
   smoke-tests:
     runs-on: ubuntu-latest
-    # Skip if triggered by a failed deploy
+    # Skip if triggered by a failed deploy workflow
     if: >
-      github.event_name == 'workflow_dispatch' ||
+      github.event_name != 'workflow_run' ||
       github.event.workflow_run.conclusion == 'success'
 
     steps:
@@ -44,24 +56,51 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Wait for Railway services to be ready
+      - name: Resolve Railway URLs
+        id: urls
         run: |
+          # Manual dispatch URLs take priority, then repo variables
           API="${{ inputs.api_url || vars.API_URL }}"
-          echo "Waiting for API at $API to respond..."
-          for i in $(seq 1 12); do
-            if curl -sf --max-time 10 "$API/api/health" > /dev/null 2>&1; then
-              echo "API is ready!"
+          WEB="${{ inputs.web_url || vars.WEB_URL }}"
+
+          if [ -z "$API" ] || [ -z "$WEB" ]; then
+            echo "::error::Missing Railway URLs. Set API_URL and WEB_URL as repository variables."
+            echo "::error::Go to Settings > Secrets and variables > Actions > Variables tab."
+            exit 1
+          fi
+
+          echo "api_url=$API" >> "$GITHUB_OUTPUT"
+          echo "web_url=$WEB" >> "$GITHUB_OUTPUT"
+          echo "API URL: $API"
+          echo "Web URL: $WEB"
+
+      - name: Wait for Railway deployment to complete
+        run: |
+          API="${{ steps.urls.outputs.api_url }}"
+          echo "Waiting for Railway API at $API to respond..."
+          echo "Railway typically takes 1-3 minutes to deploy after a push."
+
+          READY=false
+          for i in $(seq 1 18); do
+            HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 "$API/api/health" 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "API is ready! (attempt $i)"
+              READY=true
               break
             fi
-            echo "Attempt $i/12 - API not ready, waiting 10s..."
+            echo "Attempt $i/18 - Got HTTP $HTTP_CODE, waiting 10s..."
             sleep 10
           done
+
+          if [ "$READY" = "false" ]; then
+            echo "::warning::API did not respond with 200 after 3 minutes. Running tests anyway..."
+          fi
 
       - name: Run post-deployment smoke tests
         run: npx tsx scripts/post-deploy-test.ts
         env:
-          API_URL: ${{ inputs.api_url || vars.API_URL }}
-          WEB_URL: ${{ inputs.web_url || vars.WEB_URL }}
+          API_URL: ${{ steps.urls.outputs.api_url }}
+          WEB_URL: ${{ steps.urls.outputs.web_url }}
 
       - name: Run API unit tests (verify build integrity)
         run: pnpm --filter @apcd/api test -- --passWithNoTests
@@ -73,10 +112,27 @@ jobs:
       - name: Run Web unit tests (verify build integrity)
         run: pnpm --filter @apcd/web test
 
-      - name: Report results
+      - name: Post results summary
+        if: always()
+        run: |
+          echo "## Post-Deployment Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Component | URL |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----------|-----|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| API | ${{ steps.urls.outputs.api_url }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Web | ${{ steps.urls.outputs.web_url }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Status:** ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report failure details
         if: failure()
         run: |
-          echo "::error::Post-deployment tests failed against:"
-          echo "  API: ${{ inputs.api_url || vars.API_URL }}"
-          echo "  Web: ${{ inputs.web_url || vars.WEB_URL }}"
-          echo "Check the test output above for details."
+          echo "::error::Post-deployment tests FAILED against Railway:"
+          echo "  API: ${{ steps.urls.outputs.api_url }}"
+          echo "  Web: ${{ steps.urls.outputs.web_url }}"
+          echo ""
+          echo "Possible causes:"
+          echo "  1. Railway deployment still in progress (increase wait time)"
+          echo "  2. Database migration failed on Railway"
+          echo "  3. Environment variables missing in Railway service"
+          echo "  4. API/Web service crashed during startup"
