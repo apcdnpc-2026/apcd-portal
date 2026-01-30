@@ -146,6 +146,20 @@ export default function VerificationDetailPage() {
     onError: () => toast({ title: 'Failed to forward', variant: 'destructive' }),
   });
 
+  const handleViewDocument = async (attachmentId: string) => {
+    try {
+      const res = await apiGet<any>(`/attachments/${attachmentId}/download-url`);
+      const url = res?.data?.url || res?.url;
+      if (url) {
+        window.open(url, '_blank');
+      } else {
+        toast({ title: 'Could not get download URL', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Failed to load document', variant: 'destructive' });
+    }
+  };
+
   const handleRaiseQuery = () => {
     if (!queryForm.subject || !queryForm.description) return;
     raiseQueryMutation.mutate(queryForm);
@@ -508,13 +522,13 @@ export default function VerificationDetailPage() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          {doc.fileUrl && (
-                            <Button variant="outline" size="sm" asChild>
-                              <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
-                                <Eye className="h-4 w-4 mr-1" /> View
-                              </a>
-                            </Button>
-                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewDocument(doc.id)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" /> View
+                          </Button>
                         </div>
                       </div>
                     ))}
