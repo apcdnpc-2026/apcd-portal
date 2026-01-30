@@ -188,10 +188,29 @@ export default function VerificationDetailPage() {
   const experiences = application.installationExperiences || [];
   const staffDetails = application.staffDetails || [];
   const statusHistory = application.statusHistory || [];
+  const isDraft = application.status === 'DRAFT';
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* Draft Pre-Check Banner */}
+        {isDraft && (
+          <div className="p-4 rounded-lg border border-amber-300 bg-amber-50">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              <h3 className="font-semibold text-amber-800">
+                Document Pre-Check (Draft Application)
+              </h3>
+            </div>
+            <p className="text-sm text-amber-700">
+              This application has not been formally submitted or paid for yet. The applicant has
+              requested a preliminary document check. You can review uploaded documents and raise
+              queries, but cannot forward this application until it is formally submitted with
+              payment.
+            </p>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -203,22 +222,32 @@ export default function VerificationDetailPage() {
             <div>
               <h1 className="text-2xl font-bold">{application.applicationNumber}</h1>
               <p className="text-muted-foreground">
-                {profile?.companyName} &bull; Submitted{' '}
-                {formatDate(application.submittedAt || application.createdAt)}
+                {profile?.companyName} &bull; {isDraft ? 'Created' : 'Submitted'}{' '}
+                {formatDate(
+                  isDraft
+                    ? application.createdAt
+                    : application.submittedAt || application.createdAt,
+                )}
               </p>
             </div>
           </div>
-          <Badge className={getStatusColor(application.status)}>
-            {getStatusLabel(application.status)}
+          <Badge
+            className={
+              isDraft
+                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                : getStatusColor(application.status)
+            }
+          >
+            {isDraft ? 'Pre-Check' : getStatusLabel(application.status)}
           </Badge>
         </div>
 
-        <Tabs defaultValue="details" className="w-full">
+        <Tabs defaultValue={isDraft ? 'documents' : 'details'} className="w-full">
           <TabsList className="w-full justify-start">
             <TabsTrigger value="details">Application Details</TabsTrigger>
             <TabsTrigger value="documents">Documents ({attachments.length})</TabsTrigger>
             <TabsTrigger value="queries">Queries ({(queries as any[]).length})</TabsTrigger>
-            <TabsTrigger value="actions">Actions</TabsTrigger>
+            {!isDraft && <TabsTrigger value="actions">Actions</TabsTrigger>}
           </TabsList>
 
           {/* Application Details Tab */}
@@ -647,115 +676,117 @@ export default function VerificationDetailPage() {
             )}
           </TabsContent>
 
-          {/* Actions Tab */}
-          <TabsContent value="actions" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Verification Actions</CardTitle>
-                <CardDescription>Forward the application for further processing</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Dialog open={forwardDialogOpen} onOpenChange={setForwardDialogOpen}>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Card className="border-blue-200 bg-blue-50/50">
-                      <CardContent className="p-4">
-                        <h4 className="font-medium mb-1">Forward to Committee</h4>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          Send for expert committee evaluation and scoring
-                        </p>
-                        <DialogTrigger asChild>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setForwardType('committee');
-                              setForwardRemarks('');
-                            }}
-                          >
-                            <Send className="h-4 w-4 mr-1" /> Forward to Committee
-                          </Button>
-                        </DialogTrigger>
-                      </CardContent>
-                    </Card>
+          {/* Actions Tab - only for submitted applications */}
+          {!isDraft && (
+            <TabsContent value="actions" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Verification Actions</CardTitle>
+                  <CardDescription>Forward the application for further processing</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Dialog open={forwardDialogOpen} onOpenChange={setForwardDialogOpen}>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Card className="border-blue-200 bg-blue-50/50">
+                        <CardContent className="p-4">
+                          <h4 className="font-medium mb-1">Forward to Committee</h4>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Send for expert committee evaluation and scoring
+                          </p>
+                          <DialogTrigger asChild>
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setForwardType('committee');
+                                setForwardRemarks('');
+                              }}
+                            >
+                              <Send className="h-4 w-4 mr-1" /> Forward to Committee
+                            </Button>
+                          </DialogTrigger>
+                        </CardContent>
+                      </Card>
 
-                    <Card className="border-purple-200 bg-purple-50/50">
-                      <CardContent className="p-4">
-                        <h4 className="font-medium mb-1">Forward to Field Verification</h4>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          Request on-site field inspection of installation sites
-                        </p>
-                        <DialogTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              setForwardType('field');
-                              setForwardRemarks('');
-                            }}
-                          >
-                            <Send className="h-4 w-4 mr-1" /> Forward to Field
-                          </Button>
-                        </DialogTrigger>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>
-                        {forwardType === 'committee'
-                          ? 'Forward to Committee'
-                          : 'Forward to Field Verification'}
-                      </DialogTitle>
-                      <DialogDescription>
-                        {forwardType === 'committee'
-                          ? 'This will send the application for expert committee evaluation.'
-                          : 'This will send the application for on-site field inspection.'}
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div>
-                      <Label>Remarks</Label>
-                      <Textarea
-                        value={forwardRemarks}
-                        onChange={(e) => setForwardRemarks(e.target.value)}
-                        placeholder="Add any remarks or instructions..."
-                        rows={4}
-                      />
+                      <Card className="border-purple-200 bg-purple-50/50">
+                        <CardContent className="p-4">
+                          <h4 className="font-medium mb-1">Forward to Field Verification</h4>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Request on-site field inspection of installation sites
+                          </p>
+                          <DialogTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                setForwardType('field');
+                                setForwardRemarks('');
+                              }}
+                            >
+                              <Send className="h-4 w-4 mr-1" /> Forward to Field
+                            </Button>
+                          </DialogTrigger>
+                        </CardContent>
+                      </Card>
                     </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setForwardDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleForward}
-                        disabled={
-                          forwardToCommitteeMutation.isPending || forwardToFieldMutation.isPending
-                        }
-                      >
-                        {forwardToCommitteeMutation.isPending || forwardToFieldMutation.isPending
-                          ? 'Forwarding...'
-                          : 'Confirm Forward'}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
 
-                <Separator />
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>
+                          {forwardType === 'committee'
+                            ? 'Forward to Committee'
+                            : 'Forward to Field Verification'}
+                        </DialogTitle>
+                        <DialogDescription>
+                          {forwardType === 'committee'
+                            ? 'This will send the application for expert committee evaluation.'
+                            : 'This will send the application for on-site field inspection.'}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div>
+                        <Label>Remarks</Label>
+                        <Textarea
+                          value={forwardRemarks}
+                          onChange={(e) => setForwardRemarks(e.target.value)}
+                          placeholder="Add any remarks or instructions..."
+                          rows={4}
+                        />
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setForwardDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={handleForward}
+                          disabled={
+                            forwardToCommitteeMutation.isPending || forwardToFieldMutation.isPending
+                          }
+                        >
+                          {forwardToCommitteeMutation.isPending || forwardToFieldMutation.isPending
+                            ? 'Forwarding...'
+                            : 'Confirm Forward'}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
 
-                <div className="p-4 rounded-lg border border-yellow-200 bg-yellow-50/50">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="h-5 w-5 text-yellow-600" />
-                    <h4 className="font-medium text-yellow-800">Notes</h4>
+                  <Separator />
+
+                  <div className="p-4 rounded-lg border border-yellow-200 bg-yellow-50/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                      <h4 className="font-medium text-yellow-800">Notes</h4>
+                    </div>
+                    <ul className="text-sm text-yellow-700 space-y-1 list-disc list-inside">
+                      <li>Ensure all documents have been verified before forwarding</li>
+                      <li>Raise queries for any missing or incorrect documents</li>
+                      <li>Committee evaluation requires at least one evaluator</li>
+                      <li>Field verification is required for physical site inspection</li>
+                    </ul>
                   </div>
-                  <ul className="text-sm text-yellow-700 space-y-1 list-disc list-inside">
-                    <li>Ensure all documents have been verified before forwarding</li>
-                    <li>Raise queries for any missing or incorrect documents</li>
-                    <li>Committee evaluation requires at least one evaluator</li>
-                    <li>Field verification is required for physical site inspection</li>
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </DashboardLayout>

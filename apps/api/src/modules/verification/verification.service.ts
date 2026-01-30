@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ApplicationStatus, QueryStatus } from '@prisma/client';
 
 import { PrismaService } from '../../infrastructure/database/prisma.service';
@@ -21,12 +26,14 @@ export class VerificationService {
 
   /**
    * Get applications pending verification (officer view)
+   * Includes DRAFT applications so officers can pre-check documents before payment
    */
   async getPendingApplications() {
     return this.prisma.application.findMany({
       where: {
         status: {
           in: [
+            ApplicationStatus.DRAFT,
             ApplicationStatus.SUBMITTED,
             ApplicationStatus.UNDER_REVIEW,
             ApplicationStatus.RESUBMITTED,
@@ -40,12 +47,15 @@ export class VerificationService {
         oemProfile: {
           select: { companyName: true, fullAddress: true },
         },
+        attachments: {
+          select: { id: true },
+        },
         payments: {
           where: { status: 'VERIFIED' },
           select: { id: true, totalAmount: true, paymentType: true },
         },
       },
-      orderBy: { submittedAt: 'asc' },
+      orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
     });
   }
 
@@ -209,7 +219,7 @@ export class VerificationService {
   /**
    * Close a query as resolved
    */
-  async resolveQuery(queryId: string, officerId: string, remarks?: string) {
+  async resolveQuery(queryId: string, _officerId: string, _remarks?: string) {
     const query = await this.prisma.query.findUnique({
       where: { id: queryId },
     });
