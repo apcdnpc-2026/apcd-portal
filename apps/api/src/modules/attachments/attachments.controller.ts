@@ -6,6 +6,7 @@ import {
   Post,
   Delete,
   Param,
+  Query,
   Body,
   Res,
   ParseUUIDPipe,
@@ -78,6 +79,37 @@ export class AttachmentsController {
     return this.attachmentsService.findByApplication(applicationId);
   }
 
+  // Serve locally stored files — must be defined BEFORE :id routes to avoid
+  // NestJS matching "local" as a UUID parameter
+  @Get('local/download')
+  @ApiOperation({ summary: 'Serve locally stored files (fallback when MinIO unavailable)' })
+  async serveLocalFile(@Query('path') objectPath: string, @Res() res: Response) {
+    try {
+      if (!objectPath) {
+        res.status(400).json({ message: 'Missing path parameter' });
+        return;
+      }
+      const objectName = decodeURIComponent(objectPath);
+      const buffer = await this.minioService.getFile(objectName);
+      const ext = objectName.split('.').pop()?.toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        pdf: 'application/pdf',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        doc: 'application/msword',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xls: 'application/vnd.ms-excel',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+      res.set('Content-Type', mimeTypes[ext || ''] || 'application/octet-stream');
+      res.set('Content-Disposition', `inline; filename="${objectName.split('/').pop()}"`);
+      res.send(buffer);
+    } catch {
+      res.status(404).json({ message: 'File not found' });
+    }
+  }
+
   @Get(':id/download-url')
   @ApiOperation({ summary: 'Get presigned download URL for an attachment' })
   async getDownloadUrl(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
@@ -102,26 +134,5 @@ export class AttachmentsController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.attachmentsService.verify(id, user.sub, isVerified, note);
-  }
-
-  @Get('local/*')
-  @ApiOperation({ summary: 'Serve locally stored files (fallback when MinIO unavailable)' })
-  async serveLocalFile(@Param() params: any, @Res() res: Response) {
-    try {
-      const objectName = decodeURIComponent(params[0]);
-      const buffer = await this.minioService.getFile(objectName);
-      const ext = objectName.split('.').pop()?.toLowerCase();
-      const mimeTypes: Record<string, string> = {
-        pdf: 'application/pdf',
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        png: 'image/png',
-      };
-      res.set('Content-Type', mimeTypes[ext || ''] || 'application/octet-stream');
-      res.set('Content-Disposition', `inline; filename="${objectName.split('/').pop()}"`);
-      res.send(buffer);
-    } catch {
-      res.status(404).json({ message: 'File not found' });
-    }
   }
 }

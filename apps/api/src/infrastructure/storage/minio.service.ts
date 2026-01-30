@@ -102,8 +102,8 @@ export class MinioService implements OnModuleInit {
       return this.client.presignedGetObject(this.bucket, objectName, expirySeconds);
     }
 
-    // Local storage: return a relative path (to be served by a static file route)
-    return `/api/attachments/local/${encodeURIComponent(objectName)}`;
+    // Local storage: return a relative path served by the attachments controller
+    return `/api/attachments/local/download?path=${encodeURIComponent(objectName)}`;
   }
 
   /**
