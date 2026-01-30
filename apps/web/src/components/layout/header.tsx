@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { Bell, LogOut, User, Menu } from 'lucide-react';
-import { useAuthStore, useUser } from '@/store/auth-store';
+import Link from 'next/link';
+
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useAuthStore, useUser } from '@/store/auth-store';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -33,12 +34,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       <div className="flex h-16 items-center px-4 md:px-6">
         {/* Mobile Menu Button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="md:hidden mr-2"
-          onClick={onMenuClick}
-        >
+        <Button variant="ghost" size="icon" className="md:hidden mr-2" onClick={onMenuClick}>
           <Menu className="h-5 w-5" />
         </Button>
 
@@ -61,12 +57,20 @@ export function Header({ onMenuClick }: HeaderProps) {
         {/* Right Section */}
         <div className="flex items-center gap-2">
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-[10px] font-medium text-white flex items-center justify-center">
-              3
-            </span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative">
+                <Bell className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                No new notifications
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* User Menu */}
           <DropdownMenu>

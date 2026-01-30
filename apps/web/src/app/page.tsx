@@ -226,8 +226,7 @@ export default function HomePage() {
               <Link href="/check-eligibility">
                 <Button
                   size="lg"
-                  variant="outline"
-                  className="border-white text-white hover:bg-white/10 w-full sm:w-auto"
+                  className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-gov-blue w-full sm:w-auto"
                 >
                   <CheckCircle2 className="mr-2 h-5 w-5" />
                   Check Eligibility
@@ -236,8 +235,7 @@ export default function HomePage() {
               <Link href="#process">
                 <Button
                   size="lg"
-                  variant="outline"
-                  className="border-white/50 text-white hover:bg-white/10 w-full sm:w-auto"
+                  className="bg-transparent border-2 border-white/60 text-white hover:bg-white hover:text-gov-blue w-full sm:w-auto"
                 >
                   View Process
                 </Button>
@@ -571,8 +569,7 @@ export default function HomePage() {
             <Link href="/check-eligibility">
               <Button
                 size="lg"
-                variant="outline"
-                className="border-white text-white hover:bg-white/10 w-full sm:w-auto"
+                className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-gov-blue w-full sm:w-auto"
               >
                 Check Eligibility First
               </Button>
@@ -580,8 +577,7 @@ export default function HomePage() {
             <Link href="/login">
               <Button
                 size="lg"
-                variant="outline"
-                className="border-white/50 text-white hover:bg-white/10 w-full sm:w-auto"
+                className="bg-transparent border-2 border-white/60 text-white hover:bg-white hover:text-gov-blue w-full sm:w-auto"
               >
                 Already Registered? Login
               </Button>

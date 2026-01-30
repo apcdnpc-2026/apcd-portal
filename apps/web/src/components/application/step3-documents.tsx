@@ -1,33 +1,48 @@
 'use client';
 
-import { useState } from 'react';
-import { useDropzone } from 'react-dropzone';
 import { useQuery } from '@tanstack/react-query';
 import { Upload, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { useDropzone } from 'react-dropzone';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { uploadFile, apiGet } from '@/lib/api';
-import { formatFileSize } from '@/lib/utils';
 import { FactoryPhotosSection } from './factory-photos-section';
 
-// Document requirements (excluding factory photos - handled by FactoryPhotosSection)
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { uploadFile, apiGet } from '@/lib/api';
+import { formatFileSize } from '@/lib/utils';
+
+// Document requirements — IDs must match Prisma DocumentType enum exactly
+// (excluding factory photos - handled by FactoryPhotosSection)
 const DOCUMENT_TYPES = [
+  { id: 'COMPANY_REGISTRATION', name: 'Certificate of Incorporation / Udyam', mandatory: true },
   { id: 'GST_CERTIFICATE', name: 'GST Registration Certificate', mandatory: true },
   { id: 'PAN_CARD', name: 'Company PAN Card', mandatory: true },
-  { id: 'CIN_CERTIFICATE', name: 'Certificate of Incorporation', mandatory: true },
-  { id: 'UDYAM_CERTIFICATE', name: 'Udyam/MSME Certificate', mandatory: false },
-  { id: 'STARTUP_CERTIFICATE', name: 'DPIIT Startup Certificate', mandatory: false },
-  { id: 'ISO_CERTIFICATE', name: 'ISO Certification', mandatory: true },
-  { id: 'BIS_CERTIFICATE', name: 'BIS License/Certificate', mandatory: false },
-  { id: 'FACTORY_LICENSE', name: 'Factory License', mandatory: true },
-  { id: 'POLLUTION_CONSENT', name: 'Pollution Control Board Consent', mandatory: true },
-  { id: 'FIRE_NOC', name: 'Fire Safety NOC', mandatory: true },
-  { id: 'COMPANY_PROFILE', name: 'Company Profile/Brochure', mandatory: true },
-  { id: 'PRODUCT_CATALOG', name: 'Product Catalog', mandatory: true },
-  { id: 'FINANCIAL_STATEMENT', name: 'Audited Financial Statements (3 years)', mandatory: true },
-  { id: 'BANK_SOLVENCY', name: 'Bank Solvency Certificate', mandatory: true },
+  { id: 'TURNOVER_CERTIFICATE', name: 'Audited Financial Statements (3 years)', mandatory: true },
+  { id: 'ISO_CERTIFICATION', name: 'ISO Certification (9001/14001/45001)', mandatory: true },
+  { id: 'TECHNICAL_CATALOGUE', name: 'Product Catalog / Technical Brochure', mandatory: true },
+  { id: 'PRODUCT_DATASHEET', name: 'Product Datasheet with Specifications', mandatory: true },
+  { id: 'TEST_CERTIFICATE', name: 'NABL/EPA Test Reports', mandatory: true },
+  { id: 'BANK_SOLVENCY_CERT', name: 'Bank Solvency Certificate', mandatory: true },
+  {
+    id: 'CONSENT_TO_OPERATE',
+    name: 'Consent to Operate / Pollution Board Consent',
+    mandatory: true,
+  },
+  {
+    id: 'SERVICE_SUPPORT_UNDERTAKING',
+    name: 'Service Support Undertaking (Annexure 4)',
+    mandatory: true,
+  },
+  {
+    id: 'NON_BLACKLISTING_DECLARATION',
+    name: 'Non-Blacklisting Declaration (Annexure 5)',
+    mandatory: true,
+  },
+  { id: 'COMPLAINT_HANDLING_POLICY', name: 'Complaint Handling Policy', mandatory: true },
+  { id: 'MAKE_IN_INDIA_CERT', name: 'Make in India Certificate (Annexure 3)', mandatory: false },
+  { id: 'GST_FILING_PROOF', name: 'GST Filing Proof (past 1 year)', mandatory: false },
 ];
 
 interface Step3Props {
@@ -121,7 +136,7 @@ export function Step3Documents({ applicationId, onSave, onNext }: Step3Props) {
 
   const mandatoryDocs = DOCUMENT_TYPES.filter((d) => d.mandatory);
   const uploadedMandatory = mandatoryDocs.filter(
-    (d) => uploadedFiles[d.id]?.status === 'success'
+    (d) => uploadedFiles[d.id]?.status === 'success',
   ).length;
 
   return (
@@ -129,8 +144,8 @@ export function Step3Documents({ applicationId, onSave, onNext }: Step3Props) {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="font-medium text-blue-800">Document Upload</h3>
         <p className="text-sm text-blue-700 mt-1">
-          Upload all required documents and factory photographs.
-          Maximum file size: 10MB per document.
+          Upload all required documents and factory photographs. Maximum file size: 10MB per
+          document.
         </p>
       </div>
 
@@ -158,13 +173,18 @@ export function Step3Documents({ applicationId, onSave, onNext }: Step3Props) {
             Documents: {uploadedMandatory} / {mandatoryDocs.length}
           </span>
           <span className="text-sm text-muted-foreground">
-            {mandatoryDocs.length > 0 ? Math.round((uploadedMandatory / mandatoryDocs.length) * 100) : 0}% complete
+            {mandatoryDocs.length > 0
+              ? Math.round((uploadedMandatory / mandatoryDocs.length) * 100)
+              : 0}
+            % complete
           </span>
         </div>
         <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
           <div
             className="h-full bg-primary transition-all"
-            style={{ width: `${mandatoryDocs.length > 0 ? (uploadedMandatory / mandatoryDocs.length) * 100 : 0}%` }}
+            style={{
+              width: `${mandatoryDocs.length > 0 ? (uploadedMandatory / mandatoryDocs.length) * 100 : 0}%`,
+            }}
           />
         </div>
       </div>
@@ -182,9 +202,13 @@ export function Step3Documents({ applicationId, onSave, onNext }: Step3Props) {
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{docType.name}</span>
                       {docType.mandatory ? (
-                        <Badge variant="destructive" className="text-xs">Required</Badge>
+                        <Badge variant="destructive" className="text-xs">
+                          Required
+                        </Badge>
                       ) : (
-                        <Badge variant="secondary" className="text-xs">Optional</Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Optional
+                        </Badge>
                       )}
                     </div>
 
@@ -223,19 +247,14 @@ export function Step3Documents({ applicationId, onSave, onNext }: Step3Props) {
                           <div className="flex items-center gap-2 text-red-600">
                             <AlertCircle className="h-4 w-4" />
                             <span className="text-sm">{uploaded.error}</span>
-                            <button
-                              onClick={() => removeFile(docType.id)}
-                              className="ml-auto"
-                            >
+                            <button onClick={() => removeFile(docType.id)} className="ml-auto">
                               <X className="h-4 w-4" />
                             </button>
                           </div>
                         )}
                       </div>
                     ) : (
-                      <DocumentDropzone
-                        onDrop={(file) => handleUpload(docType.id, file)}
-                      />
+                      <DocumentDropzone onDrop={(file) => handleUpload(docType.id, file)} />
                     )}
                   </div>
                 </div>
@@ -249,9 +268,7 @@ export function Step3Documents({ applicationId, onSave, onNext }: Step3Props) {
         <Button variant="outline" onClick={onNext}>
           Skip for now
         </Button>
-        <Button onClick={handleSubmit}>
-          Save & Continue
-        </Button>
+        <Button onClick={handleSubmit}>Save & Continue</Button>
       </div>
     </div>
   );
@@ -271,6 +288,10 @@ function DocumentDropzone({
     accept: accept || {
       'application/pdf': ['.pdf'],
       'image/*': ['.jpg', '.jpeg', '.png'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'application/vnd.ms-excel': ['.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
     },
   });
 

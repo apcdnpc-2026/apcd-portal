@@ -1,20 +1,50 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useEffect, useRef, type ReactNode } from 'react';
+
 import { useAuthStore, useIsAuthenticated, useUserRole, useHasHydrated } from '@/store/auth-store';
 
 // Routes accessible without authentication
-const PUBLIC_ROUTES = ['/login', '/register', '/forgot-password', '/verify'];
+const PUBLIC_ROUTES = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/verify',
+  '/check-eligibility',
+  '/empaneled-oems',
+];
 
 // Routes accessible per role
 const ROLE_ROUTES: Record<string, string[]> = {
   OEM: ['/dashboard/oem', '/applications', '/profile', '/payments', '/certificates'],
-  OFFICER: ['/dashboard/officer', '/verification', '/field-verification', '/payments', '/queries', '/reports'],
-  ADMIN: ['/dashboard/admin', '/admin', '/verification', '/field-verification', '/payments'],
-  SUPER_ADMIN: ['/dashboard/admin', '/admin', '/verification', '/field-verification', '/payments'],
-  COMMITTEE: ['/dashboard/committee', '/committee'],
-  FIELD_VERIFIER: ['/dashboard/field-verifier', '/field-verification'],
+  OFFICER: [
+    '/dashboard/officer',
+    '/verification',
+    '/field-verification',
+    '/payments',
+    '/queries',
+    '/reports',
+    '/profile',
+  ],
+  ADMIN: [
+    '/dashboard/admin',
+    '/admin',
+    '/verification',
+    '/field-verification',
+    '/payments',
+    '/profile',
+  ],
+  SUPER_ADMIN: [
+    '/dashboard/admin',
+    '/admin',
+    '/verification',
+    '/field-verification',
+    '/payments',
+    '/profile',
+  ],
+  COMMITTEE: ['/dashboard/committee', '/committee', '/profile'],
+  FIELD_VERIFIER: ['/dashboard/field-verifier', '/field-verification', '/profile'],
 };
 
 function isPublicRoute(pathname: string | null): boolean {
