@@ -314,11 +314,13 @@ export default function PaymentCheckoutPage() {
         {/* Payment Method */}
         <Tabs value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as any)}>
           <TabsList className="w-full">
-            <TabsTrigger value="razorpay" className="flex-1">
-              <CreditCard className="h-4 w-4 mr-2" /> Online Payment (Razorpay)
+            <TabsTrigger value="razorpay" className="flex-1 text-xs sm:text-sm">
+              <CreditCard className="h-4 w-4 mr-1 sm:mr-2" />{' '}
+              <span className="hidden sm:inline">Online Payment</span>
+              <span className="sm:hidden">Online</span>
             </TabsTrigger>
-            <TabsTrigger value="neft" className="flex-1">
-              <Building2 className="h-4 w-4 mr-2" /> NEFT / RTGS
+            <TabsTrigger value="neft" className="flex-1 text-xs sm:text-sm">
+              <Building2 className="h-4 w-4 mr-1 sm:mr-2" /> NEFT / RTGS
             </TabsTrigger>
           </TabsList>
 
@@ -381,14 +383,20 @@ export default function PaymentCheckoutPage() {
                         { label: 'Branch', value: bankDetails.branch },
                         { label: 'IFSC Code', value: bankDetails.ifscCode },
                       ].map((item) => (
-                        <div key={item.label} className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-muted-foreground">{item.label}</p>
-                            <p className="font-medium">{item.value}</p>
+                        <div
+                          key={item.label}
+                          className="flex items-start sm:items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs sm:text-sm text-muted-foreground">{item.label}</p>
+                            <p className="font-medium text-sm sm:text-base break-all">
+                              {item.value}
+                            </p>
                           </div>
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="flex-shrink-0"
                             onClick={() => copyToClipboard(item.value || '')}
                           >
                             <Copy className="h-4 w-4" />

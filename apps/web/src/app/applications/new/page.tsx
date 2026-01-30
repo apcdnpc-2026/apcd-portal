@@ -178,7 +178,7 @@ export default function NewApplicationPage() {
         </div>
 
         {/* Profile Summary */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="p-2 bg-green-100 rounded-full">
             <Building2 className="h-5 w-5 text-green-600" />
           </div>
@@ -191,15 +191,32 @@ export default function NewApplicationPage() {
           </Button>
         </div>
 
-        {/* Progress Steps */}
+        {/* Progress Steps — Mobile: compact indicator, Desktop: full stepper */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+            {/* Mobile compact step indicator */}
+            <div className="flex sm:hidden items-center justify-between">
+              <span className="text-sm font-medium text-primary">
+                Step {currentStep} of {STEPS.length}: {STEPS[currentStep - 1].title}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {Math.round((currentStep / STEPS.length) * 100)}%
+              </span>
+            </div>
+            <div className="sm:hidden mt-2 h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-300"
+                style={{ width: `${(currentStep / STEPS.length) * 100}%` }}
+              />
+            </div>
+
+            {/* Desktop full stepper */}
+            <div className="hidden sm:flex items-center justify-between">
               {STEPS.map((step, index) => (
                 <div key={step.id} className="flex items-center">
                   <div className="flex flex-col items-center">
                     <div
-                      className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium ${
+                      className={`h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center text-xs md:text-sm font-medium ${
                         currentStep > step.id
                           ? 'bg-green-500 text-white'
                           : currentStep === step.id
@@ -207,10 +224,14 @@ export default function NewApplicationPage() {
                             : 'bg-muted text-muted-foreground'
                       }`}
                     >
-                      {currentStep > step.id ? <Check className="h-5 w-5" /> : step.id}
+                      {currentStep > step.id ? (
+                        <Check className="h-4 w-4 md:h-5 md:w-5" />
+                      ) : (
+                        step.id
+                      )}
                     </div>
                     <span
-                      className={`mt-2 text-xs ${
+                      className={`mt-2 text-xs hidden md:block ${
                         currentStep === step.id
                           ? 'text-primary font-medium'
                           : 'text-muted-foreground'
@@ -221,7 +242,7 @@ export default function NewApplicationPage() {
                   </div>
                   {index < STEPS.length - 1 && (
                     <div
-                      className={`h-0.5 w-16 md:w-24 mx-2 ${
+                      className={`h-0.5 w-8 sm:w-12 md:w-24 mx-1 sm:mx-2 ${
                         currentStep > step.id ? 'bg-green-500' : 'bg-muted'
                       }`}
                     />

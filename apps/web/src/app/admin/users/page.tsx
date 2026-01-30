@@ -204,36 +204,42 @@ export default function AdminUsersPage() {
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs sm:text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="text-left p-3 font-medium">Name</th>
-                    <th className="text-left p-3 font-medium">Email</th>
-                    <th className="text-left p-3 font-medium">Role</th>
-                    <th className="text-left p-3 font-medium">Status</th>
-                    <th className="text-left p-3 font-medium">Last Login</th>
-                    <th className="text-left p-3 font-medium">Actions</th>
+                    <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">Name</th>
+                    <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap hidden md:table-cell">
+                      Email
+                    </th>
+                    <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">Role</th>
+                    <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">Status</th>
+                    <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap hidden lg:table-cell">
+                      Last Login
+                    </th>
+                    <th className="text-left p-2 sm:p-3 font-medium whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(users as any[]).map((user: any) => (
                     <tr key={user.id} className="border-b hover:bg-muted/30">
-                      <td className="p-3">
+                      <td className="p-2 sm:p-3">
                         {user.firstName} {user.lastName}
                       </td>
-                      <td className="p-3 text-muted-foreground">{user.email}</td>
-                      <td className="p-3">
+                      <td className="p-2 sm:p-3 text-muted-foreground hidden md:table-cell">
+                        {user.email}
+                      </td>
+                      <td className="p-2 sm:p-3">
                         <Badge variant="secondary">{user.role?.replace(/_/g, ' ')}</Badge>
                       </td>
-                      <td className="p-3">
+                      <td className="p-2 sm:p-3">
                         <Badge variant={user.isActive ? 'success' : 'destructive'}>
                           {user.isActive ? 'Active' : 'Inactive'}
                         </Badge>
                       </td>
-                      <td className="p-3 text-muted-foreground">
+                      <td className="p-2 sm:p-3 text-muted-foreground hidden lg:table-cell">
                         {user.lastLoginAt ? formatDate(user.lastLoginAt) : 'Never'}
                       </td>
-                      <td className="p-3">
+                      <td className="p-2 sm:p-3">
                         <Button
                           variant="outline"
                           size="sm"
