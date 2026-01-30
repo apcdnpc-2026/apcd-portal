@@ -44,4 +44,4 @@ COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 4000
 
 # Run migrations + seed on startup, then start the application
-CMD sh -c "cd packages/database && npx prisma migrate deploy && npx prisma db seed; cd /app && node apps/api/dist/main.js"
+CMD sh -c "cd /app/packages/database && npx prisma migrate deploy 2>&1 && npx tsx prisma/seed.ts 2>&1; cd /app && node apps/api/dist/main.js"
