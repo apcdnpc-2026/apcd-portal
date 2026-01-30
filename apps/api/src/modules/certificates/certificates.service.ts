@@ -156,19 +156,35 @@ export class CertificatesService {
       orderBy: { issuedDate: 'desc' },
     });
 
-    return certificates.map((cert) => ({
-      certificateNumber: cert.certificateNumber,
-      companyName: cert.application.oemProfile?.companyName,
-      address: cert.application.oemProfile?.fullAddress,
-      state: cert.application.oemProfile?.state,
-      contact: cert.application.oemProfile?.contactNo,
-      apcdTypes: cert.application.applicationApcds.map((a) => ({
-        category: a.apcdType.category,
-        subType: a.apcdType.subType,
-      })),
-      issuedDate: cert.issuedDate,
-      validUntil: cert.validUntil,
-    }));
+    const renewalCutoff = new Date();
+    renewalCutoff.setDate(renewalCutoff.getDate() + 60);
+
+    return certificates.map((cert) => {
+      let empanelmentStatus: string;
+      if (cert.type === CertificateType.PROVISIONAL) {
+        empanelmentStatus = 'Provisional';
+      } else if (cert.validUntil <= renewalCutoff) {
+        empanelmentStatus = 'Renewal Due';
+      } else {
+        empanelmentStatus = 'Final';
+      }
+
+      return {
+        certificateNumber: cert.certificateNumber,
+        companyName: cert.application.oemProfile?.companyName,
+        address: cert.application.oemProfile?.fullAddress,
+        state: cert.application.oemProfile?.state,
+        contact: cert.application.oemProfile?.contactNo,
+        apcdTypes: cert.application.applicationApcds.map((a) => ({
+          category: a.apcdType.category,
+          subType: a.apcdType.subType,
+        })),
+        type: cert.type,
+        empanelmentStatus,
+        issuedDate: cert.issuedDate,
+        validUntil: cert.validUntil,
+      };
+    });
   }
 
   /**

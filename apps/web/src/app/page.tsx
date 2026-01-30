@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import {
   FileText,
   ClipboardCheck,
@@ -10,13 +11,58 @@ import {
   Clock,
   Shield,
   HelpCircle,
+  Building2,
+  MapPin,
+  Search,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { apiGet } from '@/lib/api';
+
+function getEmpanelmentStatusColor(status: string) {
+  switch (status) {
+    case 'Final':
+      return 'bg-green-100 text-green-800 border-green-300';
+    case 'Provisional':
+      return 'bg-amber-100 text-amber-800 border-amber-300';
+    case 'Renewal Due':
+      return 'bg-red-100 text-red-800 border-red-300';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+}
 
 export default function HomePage() {
+  const [oemSearch, setOemSearch] = useState('');
+
+  const { data: oems = [], isLoading: oemsLoading } = useQuery({
+    queryKey: ['empaneled-oems-home'],
+    queryFn: async () => {
+      const response = await apiGet<any>('/certificates/empaneled-oems');
+      return response?.data || response || [];
+    },
+  });
+
+  const filteredOems = (oems as any[]).filter(
+    (oem) =>
+      !oemSearch ||
+      oem.companyName?.toLowerCase().includes(oemSearch.toLowerCase()) ||
+      oem.state?.toLowerCase().includes(oemSearch.toLowerCase()),
+  );
+
+  const displayedOems = filteredOems.slice(0, 10);
+
   const processSteps = [
     {
       step: 1,
@@ -61,32 +107,51 @@ export default function HomePage() {
     'Bag Filters / Fabric Filters',
     'Wet Scrubbers',
     'Cyclone Separators',
-    'Venturi Scrubbers',
-    'Catalytic Converters',
-    'Activated Carbon Adsorbers',
-    'Thermal Oxidizers',
+    'Dry Scrubbers',
+    'Fume Extraction Systems',
+    'Hybrid / Other Technologies',
   ];
 
   const faqs = [
     {
       question: 'Who can apply for empanelment?',
       answer:
-        'Manufacturers of Air Pollution Control Devices (APCDs) with valid GST registration and manufacturing facilities in India can apply.',
+        'Manufacturers of Air Pollution Control Devices (APCDs) with valid GST registration, manufacturing facilities in India, at least 3 years of operating history, and a minimum of 3 APCD installations can apply.',
     },
     {
       question: 'What documents are required?',
       answer:
-        'Company registration certificates, GST registration, manufacturing facility proof, product catalogs, test reports, and quality certifications.',
+        'Company registration certificates, GST registration, PAN card, manufacturing facility proof, product catalogs, NABL-accredited test reports, ISO certifications (if available), and installation experience proof (minimum 3 installations).',
     },
     {
       question: 'How long does the process take?',
       answer:
-        'The complete empanelment process typically takes 45-60 working days after submission of complete application.',
+        'The complete empanelment process typically takes 45-60 working days after submission of a complete application with all required documents.',
     },
     {
       question: 'What is the validity of the certificate?',
       answer:
-        'The empanelment certificate is valid for 3 years from the date of issuance and can be renewed before expiry.',
+        'The empanelment certificate is valid for 2 years from the date of issuance and can be renewed before expiry.',
+    },
+    {
+      question: 'What are the fees for empanelment?',
+      answer:
+        'The application fee is \u20B925,000 plus \u20B965,000 per APCD type selected, plus 18% GST. MSE/DPIIT-recognized startups and Class-I local suppliers are eligible for a 15% discount.',
+    },
+    {
+      question: 'Can I apply for multiple APCD categories?',
+      answer:
+        'Yes, you can select multiple APCD categories in a single application. Each additional APCD type has a separate fee of \u20B965,000.',
+    },
+    {
+      question: 'What happens after approval?',
+      answer:
+        'Upon approval, you receive an empanelment certificate (provisional or final) valid for 2 years. Your company will be listed on the public empanelled OEMs directory. The certificate can be renewed before expiry.',
+    },
+    {
+      question: 'Is there a field verification?',
+      answer:
+        'Yes, NPC officers conduct a physical verification of your manufacturing facility to confirm production capabilities, quality systems, and installed equipment. The field verification fee is \u20B957,000.',
     },
   ];
 
@@ -158,11 +223,21 @@ export default function HomePage() {
                   <ChevronRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Link href="#process">
+              <Link href="/check-eligibility">
                 <Button
                   size="lg"
                   variant="outline"
                   className="border-white text-white hover:bg-white/10 w-full sm:w-auto"
+                >
+                  <CheckCircle2 className="mr-2 h-5 w-5" />
+                  Check Eligibility
+                </Button>
+              </Link>
+              <Link href="#process">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-white/50 text-white hover:bg-white/10 w-full sm:w-auto"
                 >
                   View Process
                 </Button>
@@ -278,8 +353,109 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Required Documents */}
+      {/* Empanelled OEMs - Live List */}
       <section className="py-16">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-4">Empanelled OEM Manufacturers</h2>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              List of manufacturers currently empaneled for Air Pollution Control Devices
+            </p>
+          </div>
+
+          {/* Search */}
+          <div className="max-w-md mx-auto mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by company or state..."
+                value={oemSearch}
+                onChange={(e) => setOemSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground text-center mb-4">
+            {oemsLoading ? 'Loading...' : `${filteredOems.length} empaneled manufacturer(s)`}
+          </p>
+
+          {oemsLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : filteredOems.length === 0 ? (
+            <Card className="max-w-2xl mx-auto">
+              <CardContent className="py-12 text-center">
+                <Award className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">
+                  {(oems as any[]).length === 0
+                    ? 'No manufacturers empaneled yet. Be the first to apply!'
+                    : 'No manufacturers match your search.'}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="max-w-4xl mx-auto space-y-3">
+              {displayedOems.map((oem: any, index: number) => (
+                <Card key={index} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+                      <div className="p-2 bg-green-100 rounded-lg flex-shrink-0 hidden sm:block">
+                        <Building2 className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <h3 className="font-semibold">{oem.companyName}</h3>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge className={getEmpanelmentStatusColor(oem.empanelmentStatus)}>
+                              {oem.empanelmentStatus}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {oem.certificateNumber}
+                            </Badge>
+                          </div>
+                        </div>
+                        {oem.state && (
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {oem.state}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {oem.apcdTypes?.slice(0, 3).map((type: any, i: number) => (
+                            <Badge key={i} variant="secondary" className="text-xs">
+                              {type.category?.replace(/_/g, ' ')}
+                            </Badge>
+                          ))}
+                          {oem.apcdTypes?.length > 3 && (
+                            <Badge variant="secondary" className="text-xs">
+                              +{oem.apcdTypes.length - 3} more
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              {filteredOems.length > 10 && (
+                <div className="text-center pt-4">
+                  <Link href="/empaneled-oems">
+                    <Button variant="outline">
+                      View All {filteredOems.length} Manufacturers
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Required Documents */}
+      <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-10">
@@ -348,28 +524,28 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* FAQs */}
-      <section className="py-16 bg-gray-50">
+      {/* FAQs - Accordion */}
+      <section className="py-16">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto">
             <div className="text-center mb-10">
               <h2 className="text-2xl sm:text-3xl font-bold mb-4">Frequently Asked Questions</h2>
             </div>
-            <div className="space-y-4">
+            <Accordion type="single" collapsible className="w-full">
               {faqs.map((faq, index) => (
-                <Card key={index}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start gap-3">
+                <AccordionItem key={index} value={`faq-${index}`}>
+                  <AccordionTrigger className="text-left">
+                    <span className="flex items-start gap-3">
                       <HelpCircle className="h-5 w-5 text-gov-blue mt-0.5 flex-shrink-0" />
-                      <CardTitle className="text-base font-medium">{faq.question}</CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pl-11">
-                    <p className="text-sm text-muted-foreground">{faq.answer}</p>
-                  </CardContent>
-                </Card>
+                      <span className="text-base font-medium">{faq.question}</span>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pl-8 text-muted-foreground">
+                    {faq.answer}
+                  </AccordionContent>
+                </AccordionItem>
               ))}
-            </div>
+            </Accordion>
           </div>
         </div>
       </section>
@@ -392,11 +568,20 @@ export default function HomePage() {
                 <ChevronRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
-            <Link href="/login">
+            <Link href="/check-eligibility">
               <Button
                 size="lg"
                 variant="outline"
                 className="border-white text-white hover:bg-white/10 w-full sm:w-auto"
+              >
+                Check Eligibility First
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-white/50 text-white hover:bg-white/10 w-full sm:w-auto"
               >
                 Already Registered? Login
               </Button>
@@ -433,6 +618,11 @@ export default function HomePage() {
                 <li>
                   <Link href="/empaneled-oems" className="hover:text-white">
                     Empaneled OEMs
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/check-eligibility" className="hover:text-white">
+                    Check Eligibility
                   </Link>
                 </li>
                 <li>
