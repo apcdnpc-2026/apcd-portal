@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
@@ -8,16 +11,22 @@ export class MinioService implements OnModuleInit {
   private client: Minio.Client | null = null;
   private bucket: string;
   private isEnabled: boolean;
+  private localStoragePath: string;
 
   constructor(private configService: ConfigService) {
     this.bucket = this.configService.get<string>('MINIO_BUCKET', 'apcd-documents');
     // Only enable MinIO if storage type is not 'local'
     this.isEnabled = this.configService.get<string>('STORAGE_TYPE', 'local') !== 'local';
+    this.localStoragePath = this.configService.get<string>(
+      'LOCAL_STORAGE_PATH',
+      path.join(process.cwd(), 'uploads'),
+    );
   }
 
   async onModuleInit() {
     if (!this.isEnabled) {
       this.logger.log('MinIO disabled - using local storage');
+      this.ensureLocalStorageDir();
       return;
     }
 
@@ -37,8 +46,16 @@ export class MinioService implements OnModuleInit {
       }
       this.logger.log('MinIO connection established');
     } catch (error) {
-      this.logger.warn(`MinIO connection failed: ${error.message}. File uploads will use local storage.`);
+      this.logger.warn(`MinIO connection failed: ${error.message}. Falling back to local storage.`);
       this.client = null;
+      this.ensureLocalStorageDir();
+    }
+  }
+
+  private ensureLocalStorageDir() {
+    if (!fs.existsSync(this.localStoragePath)) {
+      fs.mkdirSync(this.localStoragePath, { recursive: true });
+      this.logger.log(`Created local storage directory: ${this.localStoragePath}`);
     }
   }
 
@@ -50,7 +67,7 @@ export class MinioService implements OnModuleInit {
   }
 
   /**
-   * Upload a file to MinIO
+   * Upload a file — uses MinIO if available, otherwise local filesystem
    */
   async uploadFile(
     objectName: string,
@@ -58,13 +75,22 @@ export class MinioService implements OnModuleInit {
     contentType: string,
     metadata?: Record<string, string>,
   ): Promise<string> {
-    if (!this.client) {
-      throw new Error('MinIO is not available. Use local storage instead.');
+    if (this.client) {
+      await this.client.putObject(this.bucket, objectName, buffer, buffer.length, {
+        'Content-Type': contentType,
+        ...metadata,
+      });
+      return objectName;
     }
-    await this.client.putObject(this.bucket, objectName, buffer, buffer.length, {
-      'Content-Type': contentType,
-      ...metadata,
-    });
+
+    // Local storage fallback
+    const filePath = path.join(this.localStoragePath, objectName);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, buffer);
+    this.logger.debug(`Saved file locally: ${filePath}`);
     return objectName;
   }
 
@@ -72,56 +98,80 @@ export class MinioService implements OnModuleInit {
    * Get a presigned URL for downloading a file
    */
   async getPresignedUrl(objectName: string, expirySeconds: number = 3600): Promise<string> {
-    if (!this.client) {
-      throw new Error('MinIO is not available');
+    if (this.client) {
+      return this.client.presignedGetObject(this.bucket, objectName, expirySeconds);
     }
-    return this.client.presignedGetObject(this.bucket, objectName, expirySeconds);
+
+    // Local storage: return a relative path (to be served by a static file route)
+    return `/api/attachments/local/${encodeURIComponent(objectName)}`;
   }
 
   /**
    * Download a file as a Buffer
    */
   async getFile(objectName: string): Promise<Buffer> {
-    if (!this.client) {
-      throw new Error('MinIO is not available');
+    if (this.client) {
+      const stream = await this.client.getObject(this.bucket, objectName);
+      const chunks: Buffer[] = [];
+      return new Promise((resolve, reject) => {
+        stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+        stream.on('end', () => resolve(Buffer.concat(chunks)));
+        stream.on('error', reject);
+      });
     }
-    const stream = await this.client.getObject(this.bucket, objectName);
-    const chunks: Buffer[] = [];
-    return new Promise((resolve, reject) => {
-      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-      stream.on('end', () => resolve(Buffer.concat(chunks)));
-      stream.on('error', reject);
-    });
+
+    // Local storage fallback
+    const filePath = path.join(this.localStoragePath, objectName);
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found: ${objectName}`);
+    }
+    return fs.readFileSync(filePath);
   }
 
   /**
-   * Delete a file from MinIO
+   * Delete a file from MinIO or local storage
    */
   async deleteFile(objectName: string): Promise<void> {
-    if (!this.client) {
-      throw new Error('MinIO is not available');
+    if (this.client) {
+      await this.client.removeObject(this.bucket, objectName);
+      return;
     }
-    await this.client.removeObject(this.bucket, objectName);
+
+    // Local storage fallback
+    const filePath = path.join(this.localStoragePath, objectName);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
   }
 
   /**
    * Get file metadata (stat)
    */
-  async getFileInfo(objectName: string): Promise<Minio.BucketItemStat> {
-    if (!this.client) {
-      throw new Error('MinIO is not available');
+  async getFileInfo(objectName: string): Promise<Minio.BucketItemStat | { size: number }> {
+    if (this.client) {
+      return this.client.statObject(this.bucket, objectName);
     }
-    return this.client.statObject(this.bucket, objectName);
+
+    // Local storage fallback
+    const filePath = path.join(this.localStoragePath, objectName);
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found: ${objectName}`);
+    }
+    const stats = fs.statSync(filePath);
+    return { size: stats.size };
+  }
+
+  /**
+   * Get the local storage path for serving files
+   */
+  getLocalStoragePath(): string {
+    return this.localStoragePath;
   }
 
   /**
    * Generate the storage path for an application's document
    */
-  static buildObjectKey(
-    applicationId: string,
-    documentType: string,
-    fileName: string,
-  ): string {
+  static buildObjectKey(applicationId: string, documentType: string, fileName: string): string {
     const timestamp = Date.now();
     const sanitized = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
     return `applications/${applicationId}/${documentType}/${timestamp}_${sanitized}`;

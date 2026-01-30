@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 
 interface StepProps {
   applicationId: string | null;
@@ -22,25 +22,25 @@ interface SiteEntry {
   industryName: string;
   location: string;
   address: string;
-  contactPerson: string;
-  contactPhone: string;
+  industryRepName: string;
+  industryRepMobile: string;
   apcdType: string;
   designCapacity: string;
-  installationYear: string;
+  installationDate: string;
 }
 
 const emptySite: SiteEntry = {
   industryName: '',
   location: '',
   address: '',
-  contactPerson: '',
-  contactPhone: '',
+  industryRepName: '',
+  industryRepMobile: '',
   apcdType: '',
   designCapacity: '',
-  installationYear: '',
+  installationDate: '',
 };
 
-export function Step7FieldVerificationSites({ applicationId, onSave, onNext }: StepProps) {
+export function Step7FieldVerificationSites({ applicationId, onNext }: StepProps) {
   const { toast } = useToast();
   const [sites, setSites] = useState<SiteEntry[]>([{ ...emptySite }]);
   const [saving, setSaving] = useState(false);
@@ -61,11 +61,11 @@ export function Step7FieldVerificationSites({ applicationId, onSave, onNext }: S
           industryName: s.industryName || '',
           location: s.location || '',
           address: s.address || '',
-          contactPerson: s.contactPerson || '',
-          contactPhone: s.contactPhone || '',
+          industryRepName: s.industryRepName || '',
+          industryRepMobile: s.industryRepMobile || '',
           apcdType: s.apcdType || '',
           designCapacity: s.designCapacity || '',
-          installationYear: s.installationYear || '',
+          installationDate: s.installationDate || '',
         })),
       );
     }
@@ -97,7 +97,8 @@ export function Step7FieldVerificationSites({ applicationId, onSave, onNext }: S
 
     setSaving(true);
     try {
-      await onSave({ fieldVerificationSites: sites });
+      await apiPost(`/field-verification/sites/${applicationId}/bulk`, { sites });
+      toast({ title: 'Verification sites saved' });
       onNext();
     } catch {
       toast({ title: 'Failed to save', variant: 'destructive' });
@@ -166,8 +167,8 @@ export function Step7FieldVerificationSites({ applicationId, onSave, onNext }: S
               <div>
                 <Label>Contact Person (Site Representative)</Label>
                 <Input
-                  value={site.contactPerson}
-                  onChange={(e) => updateSite(index, 'contactPerson', e.target.value)}
+                  value={site.industryRepName}
+                  onChange={(e) => updateSite(index, 'industryRepName', e.target.value)}
                   placeholder="Name of site contact"
                   className="mt-1"
                 />
@@ -175,8 +176,8 @@ export function Step7FieldVerificationSites({ applicationId, onSave, onNext }: S
               <div>
                 <Label>Contact Phone</Label>
                 <Input
-                  value={site.contactPhone}
-                  onChange={(e) => updateSite(index, 'contactPhone', e.target.value)}
+                  value={site.industryRepMobile}
+                  onChange={(e) => updateSite(index, 'industryRepMobile', e.target.value)}
                   placeholder="Phone number"
                   className="mt-1"
                 />
@@ -200,10 +201,10 @@ export function Step7FieldVerificationSites({ applicationId, onSave, onNext }: S
                 />
               </div>
               <div>
-                <Label>Installation Year</Label>
+                <Label>Installation Date</Label>
                 <Input
-                  value={site.installationYear}
-                  onChange={(e) => updateSite(index, 'installationYear', e.target.value)}
+                  value={site.installationDate}
+                  onChange={(e) => updateSite(index, 'installationDate', e.target.value)}
                   placeholder="e.g., 2023"
                   className="mt-1"
                 />

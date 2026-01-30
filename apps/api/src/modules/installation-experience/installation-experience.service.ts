@@ -43,6 +43,21 @@ export class InstallationExperienceService {
     return this.prisma.installationExperience.update({ where: { id }, data: dto });
   }
 
+  async bulkCreate(applicationId: string, userId: string, entries: InstallationExperienceDto[]) {
+    await this.validateOwnership(applicationId, userId);
+
+    // Delete existing entries and replace with new ones
+    await this.prisma.installationExperience.deleteMany({ where: { applicationId } });
+    await this.prisma.installationExperience.createMany({
+      data: entries.map((entry, index) => ({
+        ...entry,
+        applicationId,
+        sortOrder: index + 1,
+      })),
+    });
+    return this.findByApplication(applicationId);
+  }
+
   async delete(id: string, userId: string) {
     const exp = await this.prisma.installationExperience.findUnique({
       where: { id },

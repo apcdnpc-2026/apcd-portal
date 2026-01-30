@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ApplicationStatus, Role } from '@prisma/client';
 
 import { PrismaService } from '../../infrastructure/database/prisma.service';
@@ -31,6 +36,31 @@ export class FieldVerificationService {
       where: { applicationId },
       orderBy: { slNo: 'asc' },
     });
+  }
+
+  /**
+   * Bulk create/replace field verification sites
+   */
+  async bulkCreateSites(applicationId: string, userId: string, sites: any[]) {
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+    if (application.applicantId !== userId) throw new ForbiddenException('Not authorized');
+
+    if (sites.length > 3) {
+      throw new BadRequestException('Maximum 3 field verification sites allowed');
+    }
+
+    await this.prisma.fieldVerificationSite.deleteMany({ where: { applicationId } });
+    await this.prisma.fieldVerificationSite.createMany({
+      data: sites.map((site, index) => ({
+        applicationId,
+        slNo: index + 1,
+        ...site,
+      })),
+    });
+    return this.getSitesForApplication(applicationId);
   }
 
   /**

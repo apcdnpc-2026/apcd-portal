@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 
 interface StepProps {
   applicationId: string | null;
@@ -24,7 +24,7 @@ interface ExperienceEntry {
   installationDate: string;
   emissionSource: string;
   apcdType: string;
-  capacity: string;
+  apcdCapacity: string;
   performanceResult: string;
 }
 
@@ -34,11 +34,11 @@ const emptyEntry: ExperienceEntry = {
   installationDate: '',
   emissionSource: '',
   apcdType: '',
-  capacity: '',
+  apcdCapacity: '',
   performanceResult: '',
 };
 
-export function Step5InstallationExperience({ applicationId, onSave, onNext }: StepProps) {
+export function Step5InstallationExperience({ applicationId, onNext }: StepProps) {
   const { toast } = useToast();
   const [entries, setEntries] = useState<ExperienceEntry[]>([
     { ...emptyEntry },
@@ -50,7 +50,7 @@ export function Step5InstallationExperience({ applicationId, onSave, onNext }: S
   // Fetch existing entries
   const { data: response } = useQuery({
     queryKey: ['installation-experience', applicationId],
-    queryFn: () => apiGet<any>(`/installation-experience/${applicationId}`),
+    queryFn: () => apiGet<any>(`/installation-experience/application/${applicationId}`),
     enabled: !!applicationId,
   });
 
@@ -67,7 +67,7 @@ export function Step5InstallationExperience({ applicationId, onSave, onNext }: S
             : '',
           emissionSource: e.emissionSource || '',
           apcdType: e.apcdType || '',
-          capacity: e.capacity || '',
+          apcdCapacity: e.apcdCapacity || '',
           performanceResult: e.performanceResult || '',
         })),
       );
@@ -100,7 +100,8 @@ export function Step5InstallationExperience({ applicationId, onSave, onNext }: S
 
     setSaving(true);
     try {
-      await onSave({ installationExperiences: entries });
+      await apiPost(`/installation-experience/${applicationId}/bulk`, { entries });
+      toast({ title: 'Installation experiences saved' });
       onNext();
     } catch {
       toast({ title: 'Failed to save', variant: 'destructive' });
@@ -185,8 +186,8 @@ export function Step5InstallationExperience({ applicationId, onSave, onNext }: S
               <div>
                 <Label>Capacity</Label>
                 <Input
-                  value={entry.capacity}
-                  onChange={(e) => updateEntry(index, 'capacity', e.target.value)}
+                  value={entry.apcdCapacity}
+                  onChange={(e) => updateEntry(index, 'apcdCapacity', e.target.value)}
                   placeholder="e.g., 50,000 Nm³/hr"
                   className="mt-1"
                 />

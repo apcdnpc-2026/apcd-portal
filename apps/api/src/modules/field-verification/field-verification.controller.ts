@@ -2,9 +2,10 @@ import { Controller, Get, Post, Put, Delete, Param, Body, ParseUUIDPipe } from '
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
-import { FieldVerificationService } from './field-verification.service';
-import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+
+import { FieldVerificationService } from './field-verification.service';
 
 @ApiTags('Field Verification')
 @ApiBearerAuth()
@@ -36,19 +37,26 @@ export class FieldVerificationController {
   @Get('sites/:applicationId')
   @Roles(Role.OEM, Role.OFFICER, Role.ADMIN)
   @ApiOperation({ summary: 'Get field verification sites for an application' })
-  async getSitesForApplication(
-    @Param('applicationId', ParseUUIDPipe) applicationId: string,
-  ) {
+  async getSitesForApplication(@Param('applicationId', ParseUUIDPipe) applicationId: string) {
     return this.service.getSitesForApplication(applicationId);
   }
 
   @Get('reports/:applicationId')
   @Roles(Role.OEM, Role.OFFICER, Role.ADMIN, Role.FIELD_VERIFIER)
   @ApiOperation({ summary: 'Get field reports for an application' })
-  async getReportsForApplication(
-    @Param('applicationId', ParseUUIDPipe) applicationId: string,
-  ) {
+  async getReportsForApplication(@Param('applicationId', ParseUUIDPipe) applicationId: string) {
     return this.service.getReportsForApplication(applicationId);
+  }
+
+  @Post('sites/:applicationId/bulk')
+  @Roles(Role.OEM)
+  @ApiOperation({ summary: 'Bulk create/replace field verification sites' })
+  async bulkCreateSites(
+    @Param('applicationId', ParseUUIDPipe) applicationId: string,
+    @Body() dto: { sites: any[] },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.bulkCreateSites(applicationId, user.sub, dto.sites);
   }
 
   @Post('sites/:applicationId')

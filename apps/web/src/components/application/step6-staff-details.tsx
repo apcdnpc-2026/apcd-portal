@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 
 interface StepProps {
   applicationId: string | null;
@@ -24,7 +24,7 @@ interface StaffEntry {
   designation: string;
   qualification: string;
   experienceYears: number;
-  isFieldCoordinator: boolean;
+  isFieldVisitCoordinator: boolean;
 }
 
 const emptyStaff: StaffEntry = {
@@ -33,10 +33,10 @@ const emptyStaff: StaffEntry = {
   designation: '',
   qualification: '',
   experienceYears: 0,
-  isFieldCoordinator: false,
+  isFieldVisitCoordinator: false,
 };
 
-export function Step6StaffDetails({ applicationId, onSave, onNext }: StepProps) {
+export function Step6StaffDetails({ applicationId, onNext }: StepProps) {
   const { toast } = useToast();
   const [staff, setStaff] = useState<StaffEntry[]>([{ ...emptyStaff }]);
   const [saving, setSaving] = useState(false);
@@ -44,7 +44,7 @@ export function Step6StaffDetails({ applicationId, onSave, onNext }: StepProps) 
   // Fetch existing staff
   const { data: response } = useQuery({
     queryKey: ['staff-details', applicationId],
-    queryFn: () => apiGet<any>(`/staff-details/${applicationId}`),
+    queryFn: () => apiGet<any>(`/staff-details/application/${applicationId}`),
     enabled: !!applicationId,
   });
 
@@ -59,7 +59,7 @@ export function Step6StaffDetails({ applicationId, onSave, onNext }: StepProps) 
           designation: s.designation || '',
           qualification: s.qualification || '',
           experienceYears: s.experienceYears || 0,
-          isFieldCoordinator: s.isFieldCoordinator || false,
+          isFieldVisitCoordinator: s.isFieldVisitCoordinator || false,
         })),
       );
     }
@@ -87,7 +87,8 @@ export function Step6StaffDetails({ applicationId, onSave, onNext }: StepProps) 
 
     setSaving(true);
     try {
-      await onSave({ staffDetails: staff });
+      await apiPost(`/staff-details/${applicationId}/bulk`, { staffList: staff });
+      toast({ title: 'Staff details saved' });
       onNext();
     } catch {
       toast({ title: 'Failed to save', variant: 'destructive' });
@@ -175,8 +176,8 @@ export function Step6StaffDetails({ applicationId, onSave, onNext }: StepProps) 
                 <input
                   type="checkbox"
                   id={`coordinator-${index}`}
-                  checked={member.isFieldCoordinator}
-                  onChange={(e) => updateStaff(index, 'isFieldCoordinator', e.target.checked)}
+                  checked={member.isFieldVisitCoordinator}
+                  onChange={(e) => updateStaff(index, 'isFieldVisitCoordinator', e.target.checked)}
                   className="h-4 w-4 rounded border-gray-300"
                 />
                 <Label htmlFor={`coordinator-${index}`} className="cursor-pointer">
