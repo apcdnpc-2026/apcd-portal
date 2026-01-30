@@ -46,7 +46,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { apiGet, apiPost, apiPut } from '@/lib/api';
+import api, { apiGet, apiPost, apiPut } from '@/lib/api';
 import {
   formatDate,
   formatDateTime,
@@ -148,12 +148,23 @@ export default function VerificationDetailPage() {
 
   const handleViewDocument = async (attachmentId: string) => {
     try {
+      // Get the download URL from the API
       const res = await apiGet<any>(`/attachments/${attachmentId}/download-url`);
       const url = res?.data?.url || res?.url;
-      if (url) {
-        window.open(url, '_blank');
-      } else {
+      if (!url) {
         toast({ title: 'Could not get download URL', variant: 'destructive' });
+        return;
+      }
+
+      // If it's a relative /api/ path (local storage), fetch as blob through the
+      // authenticated API client then open a blob URL in a new tab
+      if (url.startsWith('/api/')) {
+        const blobRes = await api.get(url.replace(/^\/api/, ''), { responseType: 'blob' });
+        const blobUrl = URL.createObjectURL(blobRes.data);
+        window.open(blobUrl, '_blank');
+      } else {
+        // MinIO presigned URL — already absolute and public
+        window.open(url, '_blank');
       }
     } catch {
       toast({ title: 'Failed to load document', variant: 'destructive' });
