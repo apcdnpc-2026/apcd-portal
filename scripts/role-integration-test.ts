@@ -19,14 +19,37 @@ const API_URL =
   process.env.API_URL ||
   'http://localhost:4000';
 
+// Default credentials from seed.ts — override with --password=<pwd> for all roles
+const DEFAULT_PASSWORD = process.argv.find((a) => a.startsWith('--password='))?.split('=')[1] || '';
+
 const CREDENTIALS: Record<string, { email: string; password: string }> = {
-  oem: { email: 'oem@testcompany.com', password: 'Oem@APCD2025!' },
-  officer: { email: 'officer@npcindia.gov.in', password: 'Officer@APCD2025!' },
-  admin: { email: 'admin@npcindia.gov.in', password: 'Admin@APCD2025!' },
-  head: { email: 'head@npcindia.gov.in', password: 'Head@APCD2025!' },
-  committee: { email: 'committee@npcindia.gov.in', password: 'Committee@APCD2025!' },
-  fieldVerifier: { email: 'fieldverifier@npcindia.gov.in', password: 'Field@APCD2025!' },
-  dealingHand: { email: 'dealinghand@npcindia.gov.in', password: 'Dealing@APCD2025!' },
+  oem: { email: 'oem@testcompany.com', password: DEFAULT_PASSWORD || 'Oem@APCD2025!' },
+  officer: {
+    email: 'officer@npcindia.gov.in',
+    password: DEFAULT_PASSWORD || 'Officer@APCD2025!',
+  },
+  admin: { email: 'admin@npcindia.gov.in', password: DEFAULT_PASSWORD || 'Admin@APCD2025!' },
+  head: { email: 'head@npcindia.gov.in', password: DEFAULT_PASSWORD || 'Head@APCD2025!' },
+  committee: {
+    email: 'committee@npcindia.gov.in',
+    password: DEFAULT_PASSWORD || 'Committee@APCD2025!',
+  },
+  fieldVerifier: {
+    email: 'fieldverifier@npcindia.gov.in',
+    password: DEFAULT_PASSWORD || 'Field@APCD2025!',
+  },
+  dealingHand: {
+    email: 'dealinghand@npcindia.gov.in',
+    password: DEFAULT_PASSWORD || 'Dealing@APCD2025!',
+  },
+};
+
+// If OEM login fails, register a fresh OEM user for testing
+const FRESH_OEM = {
+  email: `test-oem-${Date.now()}@integration-test.com`,
+  password: 'TestOem@2025!',
+  firstName: 'IntTest',
+  lastName: 'OEM',
 };
 
 // ─── Shared State ────────────────────────────────────────────────────────────
@@ -185,7 +208,16 @@ async function uploadFile(
   const formData = new FormData();
   formData.append('applicationId', applicationId);
   formData.append('documentType', documentType);
-  formData.append('file', new Blob([fileBuffer]), fileName);
+  // Determine MIME type from file extension to avoid application/octet-stream
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  const mimeMap: Record<string, string> = {
+    pdf: 'application/pdf',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+  };
+  const mimeType = mimeMap[ext] || 'application/octet-stream';
+  formData.append('file', new Blob([fileBuffer], { type: mimeType }), fileName);
 
   const res = await fetchWithTimeout(`${API_URL}/api/attachments/upload`, {
     method: 'POST',
@@ -231,6 +263,24 @@ async function phase0_Authentication() {
       state.tokens[roleKey] = token;
     });
   }
+
+  // If OEM login failed, register a fresh OEM user
+  if (!state.tokens.oem) {
+    await test(`Register fresh OEM (${FRESH_OEM.email})`, async () => {
+      const res = await fetchJSON(`${API_URL}/api/auth/register`, {
+        method: 'POST',
+        body: JSON.stringify(FRESH_OEM),
+      });
+      assert(
+        res.status === 200 || res.status === 201,
+        `Register failed: ${res.status} — ${res.text.substring(0, 200)}`,
+      );
+      const token = res.body?.accessToken || res.body?.data?.accessToken;
+      assert(!!token, 'No accessToken after registration');
+      state.tokens.oem = token;
+      console.log(`        ${dim(`Registered fresh OEM: ${FRESH_OEM.email}`)}`);
+    });
+  }
 }
 
 // ─── Phase 1: OEM Application Lifecycle ──────────────────────────────────────
@@ -239,7 +289,7 @@ async function phase1_OEMApplication() {
   console.log(cyan('\n━━━ Phase 1: OEM Application Lifecycle ━━━'));
 
   if (!state.tokens.oem) {
-    skip('Phase 1', 'OEM login failed');
+    skip('Phase 1', 'OEM login and registration both failed');
     return;
   }
 
