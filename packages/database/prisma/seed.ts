@@ -122,7 +122,7 @@ async function main() {
   const adminPasswordHash = await bcrypt.hash('Admin@APCD2025!', 12);
   await prisma.user.upsert({
     where: { email: 'admin@npcindia.gov.in' },
-    update: {},
+    update: { passwordHash: adminPasswordHash },
     create: {
       email: 'admin@npcindia.gov.in',
       passwordHash: adminPasswordHash,
@@ -139,7 +139,7 @@ async function main() {
   const officerPasswordHash = await bcrypt.hash('Officer@APCD2025!', 12);
   await prisma.user.upsert({
     where: { email: 'officer@npcindia.gov.in' },
-    update: {},
+    update: { passwordHash: officerPasswordHash },
     create: {
       email: 'officer@npcindia.gov.in',
       passwordHash: officerPasswordHash,
@@ -156,7 +156,7 @@ async function main() {
   const headPasswordHash = await bcrypt.hash('Head@APCD2025!', 12);
   await prisma.user.upsert({
     where: { email: 'head@npcindia.gov.in' },
-    update: {},
+    update: { passwordHash: headPasswordHash },
     create: {
       email: 'head@npcindia.gov.in',
       passwordHash: headPasswordHash,
@@ -173,7 +173,7 @@ async function main() {
   const committeePasswordHash = await bcrypt.hash('Committee@APCD2025!', 12);
   await prisma.user.upsert({
     where: { email: 'committee@npcindia.gov.in' },
-    update: {},
+    update: { passwordHash: committeePasswordHash },
     create: {
       email: 'committee@npcindia.gov.in',
       passwordHash: committeePasswordHash,
@@ -190,7 +190,7 @@ async function main() {
   const fieldPasswordHash = await bcrypt.hash('Field@APCD2025!', 12);
   await prisma.user.upsert({
     where: { email: 'fieldverifier@npcindia.gov.in' },
-    update: {},
+    update: { passwordHash: fieldPasswordHash },
     create: {
       email: 'fieldverifier@npcindia.gov.in',
       passwordHash: fieldPasswordHash,
@@ -207,7 +207,7 @@ async function main() {
   const dealingPasswordHash = await bcrypt.hash('Dealing@APCD2025!', 12);
   await prisma.user.upsert({
     where: { email: 'dealinghand@npcindia.gov.in' },
-    update: {},
+    update: { passwordHash: dealingPasswordHash },
     create: {
       email: 'dealinghand@npcindia.gov.in',
       passwordHash: dealingPasswordHash,
@@ -224,7 +224,7 @@ async function main() {
   const oemPasswordHash = await bcrypt.hash('Oem@APCD2025!', 12);
   const oemUser = await prisma.user.upsert({
     where: { email: 'oem@testcompany.com' },
-    update: {},
+    update: { passwordHash: oemPasswordHash },
     create: {
       email: 'oem@testcompany.com',
       passwordHash: oemPasswordHash,

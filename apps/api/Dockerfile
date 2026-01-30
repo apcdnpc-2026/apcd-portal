@@ -43,5 +43,5 @@ COPY --from=builder /app/node_modules ./node_modules
 # Expose port
 EXPOSE 4000
 
-# Start the application
-CMD ["node", "apps/api/dist/main.js"]
+# Run migrations + seed on startup, then start the application
+CMD sh -c "cd packages/database && npx prisma migrate deploy && npx prisma db seed; cd /app && node apps/api/dist/main.js"

@@ -11,6 +11,7 @@
     "test": "turbo test",
     "test:e2e": "playwright test",
     "test:deploy": "tsx scripts/post-deploy-test.ts",
+    "test:roles": "tsx scripts/role-integration-test.ts",
     "db:generate": "turbo db:generate",
     "db:migrate": "turbo db:migrate",
     "db:seed": "turbo db:seed",
