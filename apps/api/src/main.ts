@@ -8,6 +8,12 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
+// BigInt cannot be serialized to JSON by default — this polyfill converts to Number
+// Safe for fileSizeBytes which won't exceed Number.MAX_SAFE_INTEGER
+(BigInt.prototype as any).toJSON = function () {
+  return Number(this);
+};
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
