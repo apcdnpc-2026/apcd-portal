@@ -25,6 +25,12 @@ RUN pnpm --filter @apcd/database db:generate
 RUN pnpm --filter @apcd/shared build
 RUN pnpm --filter @apcd/api build
 
+# Pre-compile seed files so runner stage doesn't need tsx
+RUN npx esbuild packages/database/prisma/seed.ts \
+  --bundle --platform=node --format=cjs \
+  --outfile=packages/database/prisma/seed-compiled.js \
+  --external:@prisma/client --external:bcryptjs
+
 # Production stage
 FROM node:20-alpine AS runner
 
@@ -44,4 +50,4 @@ COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 4000
 
 # Run migrations + seed on startup, then start the application
-CMD sh -c "cd /app/packages/database && npx prisma migrate deploy 2>&1 && npx tsx prisma/seed.ts 2>&1; cd /app && node apps/api/dist/main.js"
+CMD sh -c "echo '=== Running migrations ===' && cd /app/packages/database && npx prisma migrate deploy 2>&1 && echo '=== Running seed ===' && node prisma/seed-compiled.js 2>&1 && echo '=== Seed complete ===' || echo '=== Seed FAILED ==='; cd /app && node apps/api/dist/main.js"
