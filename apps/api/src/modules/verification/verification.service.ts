@@ -75,7 +75,7 @@ export class VerificationService {
             apcdType: true,
           },
         },
-        attachments: true,
+        attachments: { omit: { fileData: true } },
         installationExperiences: true,
         staffDetails: true,
         payments: true,

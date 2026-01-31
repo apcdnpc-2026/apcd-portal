@@ -89,7 +89,7 @@ export class CommitteeService {
             apcdType: true,
           },
         },
-        attachments: true,
+        attachments: { omit: { fileData: true } },
         installationExperiences: true,
         staffDetails: true,
         payments: {

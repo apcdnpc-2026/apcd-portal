@@ -9,6 +9,7 @@ import {
   Query,
   Body,
   Res,
+  Logger,
   ParseUUIDPipe,
   UseInterceptors,
   UploadedFile,
@@ -30,6 +31,8 @@ import { AttachmentsService } from './attachments.service';
 @ApiBearerAuth()
 @Controller('attachments')
 export class AttachmentsController {
+  private readonly logger = new Logger(AttachmentsController.name);
+
   constructor(
     private attachmentsService: AttachmentsService,
     private minioService: MinioService,
@@ -89,9 +92,7 @@ export class AttachmentsController {
         res.status(400).json({ message: 'Missing path parameter' });
         return;
       }
-      const objectName = decodeURIComponent(objectPath);
-      const buffer = await this.minioService.getFile(objectName);
-      const ext = objectName.split('.').pop()?.toLowerCase();
+
       const mimeTypes: Record<string, string> = {
         pdf: 'application/pdf',
         jpg: 'image/jpeg',
@@ -102,12 +103,44 @@ export class AttachmentsController {
         xls: 'application/vnd.ms-excel',
         xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       };
+
+      let buffer: Buffer;
+      try {
+        // Try filesystem / MinIO first
+        buffer = await this.minioService.getFile(objectPath);
+      } catch {
+        // Fallback: read file data from database (survives container restarts)
+        this.logger.warn(`File not on disk, falling back to DB: "${objectPath}"`);
+        const dbBuffer = await this.attachmentsService.getFileDataFromDb(objectPath);
+        if (!dbBuffer) {
+          this.logger.error(
+            `File not found on disk or in DB: objectPath="${objectPath}", ` +
+            `storagePath="${this.minioService.getLocalStoragePath()}"`,
+          );
+          res.status(404).json({
+            message: 'File not found',
+            detail: 'The file could not be located in storage or database.',
+          });
+          return;
+        }
+        buffer = dbBuffer;
+      }
+
+      const ext = objectPath.split('.').pop()?.toLowerCase();
       res.set('Content-Type', mimeTypes[ext || ''] || 'application/octet-stream');
-      res.set('Content-Disposition', `inline; filename="${objectName.split('/').pop()}"`);
+      res.set('Content-Disposition', `inline; filename="${objectPath.split('/').pop()}"`);
       res.send(buffer);
-    } catch {
-      res.status(404).json({ message: 'File not found' });
+    } catch (error: any) {
+      this.logger.error(`File download failed: objectPath="${objectPath}", error="${error.message}"`);
+      res.status(500).json({ message: 'Internal error while serving file' });
     }
+  }
+
+  @Get('storage/check/:id')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Check if an attachment file exists in storage (admin diagnostic)' })
+  async checkStorageFile(@Param('id', ParseUUIDPipe) id: string) {
+    return this.attachmentsService.checkFileExists(id);
   }
 
   @Get(':id/download-url')

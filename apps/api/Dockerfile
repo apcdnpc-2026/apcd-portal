@@ -49,5 +49,5 @@ COPY --from=builder /app/node_modules ./node_modules
 # Expose port
 EXPOSE 4000
 
-# Run migrations + seed on startup, then start the application
-CMD sh -c "echo '=== Running migrations ===' && cd /app/packages/database && npx prisma migrate deploy 2>&1 && echo '=== Running seed ===' && node prisma/seed-compiled.js 2>&1 && echo '=== Seed complete ===' || echo '=== Seed FAILED ==='; cd /app && node apps/api/dist/main.js"
+# Apply schema changes + seed on startup, then start the application
+CMD sh -c "echo '=== Applying schema ===' && cd /app/packages/database && npx prisma db push --skip-generate 2>&1 && echo '=== Running seed ===' && node prisma/seed-compiled.js 2>&1 && echo '=== Seed complete ===' || echo '=== Seed FAILED ==='; cd /app && node apps/api/dist/main.js"

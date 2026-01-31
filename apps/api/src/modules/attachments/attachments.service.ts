@@ -45,7 +45,7 @@ export class AttachmentsService {
     // Validate application ownership and status
     const application = await this.prisma.application.findUnique({
       where: { id: applicationId },
-      include: { attachments: true },
+      include: { attachments: { omit: { fileData: true } } },
     });
 
     if (!application) throw new NotFoundException('Application not found');
@@ -127,10 +127,11 @@ export class AttachmentsService {
       };
     }
 
-    // Upload to MinIO
+    // Upload to MinIO / local storage
     await this.minio.uploadFile(objectKey, file.buffer, file.mimetype);
 
-    // Create attachment record
+    // Create attachment record — also store file bytes in DB so files survive
+    // ephemeral container restarts (Railway, etc.)
     return this.prisma.attachment.create({
       data: {
         applicationId,
@@ -141,6 +142,7 @@ export class AttachmentsService {
         fileSizeBytes: file.size,
         storagePath: objectKey,
         storageBucket: 'apcd-documents',
+        fileData: new Uint8Array(file.buffer),
         checksum,
         uploadedBy: userId,
         virusScanStatus: 'PENDING',
@@ -150,11 +152,12 @@ export class AttachmentsService {
   }
 
   /**
-   * Get all attachments for an application
+   * Get all attachments for an application (excludes file blob data)
    */
   async findByApplication(applicationId: string) {
     return this.prisma.attachment.findMany({
       where: { applicationId },
+      omit: { fileData: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -200,6 +203,47 @@ export class AttachmentsService {
 
     // Delete record
     return this.prisma.attachment.delete({ where: { id: attachmentId } });
+  }
+
+  /**
+   * Retrieve file content from the database by storage path.
+   * Used as fallback when local/MinIO storage is unavailable (e.g. container restart).
+   */
+  async getFileDataFromDb(storagePath: string): Promise<Buffer | null> {
+    const attachment = await this.prisma.attachment.findFirst({
+      where: { storagePath },
+      select: { fileData: true },
+    });
+    if (!attachment?.fileData) return null;
+    return Buffer.from(attachment.fileData);
+  }
+
+  /**
+   * Check if a file exists in storage (admin diagnostic)
+   */
+  async checkFileExists(attachmentId: string) {
+    const attachment = await this.prisma.attachment.findUnique({
+      where: { id: attachmentId },
+    });
+
+    if (!attachment) throw new NotFoundException('Attachment not found');
+
+    try {
+      const info = await this.minio.getFileInfo(attachment.storagePath);
+      return {
+        exists: true,
+        storagePath: attachment.storagePath,
+        storageType: this.minio.isAvailable() ? 'minio' : 'local',
+        sizeBytes: info.size,
+      };
+    } catch {
+      return {
+        exists: false,
+        storagePath: attachment.storagePath,
+        storageType: this.minio.isAvailable() ? 'minio' : 'local',
+        localStoragePath: this.minio.getLocalStoragePath(),
+      };
+    }
   }
 
   /**

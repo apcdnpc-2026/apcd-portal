@@ -90,7 +90,13 @@ export class MinioService implements OnModuleInit {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(filePath, buffer);
-    this.logger.debug(`Saved file locally: ${filePath}`);
+
+    // Verify the write succeeded
+    if (!fs.existsSync(filePath)) {
+      this.logger.error(`File write verification failed: "${filePath}" does not exist after write`);
+      throw new Error(`File write verification failed for ${objectName}`);
+    }
+    this.logger.log(`Saved file locally: ${filePath} (${buffer.length} bytes)`);
     return objectName;
   }
 
@@ -123,6 +129,11 @@ export class MinioService implements OnModuleInit {
     // Local storage fallback
     const filePath = path.join(this.localStoragePath, objectName);
     if (!fs.existsSync(filePath)) {
+      this.logger.error(
+        `Local file not found: "${filePath}" (objectName="${objectName}", ` +
+        `storageRoot="${this.localStoragePath}", ` +
+        `storageRootExists=${fs.existsSync(this.localStoragePath)})`,
+      );
       throw new Error(`File not found: ${objectName}`);
     }
     return fs.readFileSync(filePath);

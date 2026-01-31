@@ -21,7 +21,7 @@ export class ApplicationValidatorService {
         oemProfile: true,
         contactPersons: true,
         applicationApcds: true,
-        attachments: true,
+        attachments: { omit: { fileData: true } },
         installationExperiences: true,
         staffDetails: true,
         payments: { where: { status: { in: ['COMPLETED', 'VERIFIED'] } } },

@@ -443,6 +443,7 @@ model Attachment {
   fileSizeBytes   BigInt       @map("file_size_bytes")
   storagePath     String       @map("storage_path")    // MinIO object key
   storageBucket   String       @map("storage_bucket")
+  fileData        Bytes?       @map("file_data")       // File content stored in DB (fallback when no persistent disk)
   checksum        String?                                // SHA-256 hash
   virusScanStatus String       @default("PENDING") @map("virus_scan_status") // PENDING, CLEAN, INFECTED
   uploadedBy      String       @map("uploaded_by")

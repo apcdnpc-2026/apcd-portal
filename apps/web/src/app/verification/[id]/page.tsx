@@ -166,8 +166,13 @@ export default function VerificationDetailPage() {
         // MinIO presigned URL — already absolute and public
         window.open(url, '_blank');
       }
-    } catch {
-      toast({ title: 'Failed to load document', variant: 'destructive' });
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || '';
+      toast({
+        title: 'Failed to load document',
+        description: detail || 'The file may have been lost due to server restart. Please ask the applicant to re-upload.',
+        variant: 'destructive',
+      });
     }
   };
 

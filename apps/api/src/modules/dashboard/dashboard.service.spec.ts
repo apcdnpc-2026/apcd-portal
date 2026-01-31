@@ -1,0 +1,349 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import {
+  PrismaClient,
+  ApplicationStatus,
+  CertificateStatus,
+  PaymentStatus,
+  QueryStatus,
+  Role,
+} from '@prisma/client';
+import { mockDeep, DeepMockProxy } from 'jest-mock-extended';
+
+import { PrismaService } from '../../infrastructure/database/prisma.service';
+
+import { DashboardService } from './dashboard.service';
+
+// ---------------------------------------------------------------------------
+// Test suite
+// ---------------------------------------------------------------------------
+
+describe('DashboardService', () => {
+  let service: DashboardService;
+  let prisma: DeepMockProxy<PrismaClient>;
+
+  beforeEach(async () => {
+    const mockPrisma = mockDeep<PrismaClient>();
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        DashboardService,
+        { provide: PrismaService, useValue: mockPrisma },
+      ],
+    }).compile();
+
+    service = module.get<DashboardService>(DashboardService);
+    prisma = mockPrisma;
+  });
+
+  // =========================================================================
+  // getOemDashboard()
+  // =========================================================================
+
+  describe('getOemDashboard', () => {
+    it('should return applications, certificates, pending queries, and total payments', async () => {
+      const mockApps = [
+        { id: 'app-1', applicationNumber: 'APCD-2025-0001', status: ApplicationStatus.DRAFT, createdAt: new Date(), submittedAt: null },
+        { id: 'app-2', applicationNumber: 'APCD-2025-0002', status: ApplicationStatus.SUBMITTED, createdAt: new Date(), submittedAt: new Date() },
+      ];
+
+      const mockCerts = [
+        { id: 'cert-1', certificateNumber: 'CERT-001', status: CertificateStatus.ACTIVE, validUntil: new Date('2030-01-01') },
+      ];
+
+      prisma.application.findMany.mockResolvedValue(mockApps as any);
+      prisma.certificate.findMany.mockResolvedValue(mockCerts as any);
+      prisma.query.count.mockResolvedValue(2);
+      prisma.payment.aggregate.mockResolvedValue({ _sum: { totalAmount: 50000 } } as any);
+
+      const result = await service.getOemDashboard('user-1');
+
+      expect(result.applications.recent).toHaveLength(2);
+      expect(result.applications.total).toBe(2);
+      expect(result.applications.statusCounts[ApplicationStatus.DRAFT]).toBe(1);
+      expect(result.applications.statusCounts[ApplicationStatus.SUBMITTED]).toBe(1);
+      expect(result.certificates.active).toBe(1);
+      expect(result.certificates.total).toBe(1);
+      expect(result.pendingQueries).toBe(2);
+      expect(result.totalPayments).toBe(50000);
+    });
+
+    it('should return 0 total payments when no payments exist', async () => {
+      prisma.application.findMany.mockResolvedValue([]);
+      prisma.certificate.findMany.mockResolvedValue([]);
+      prisma.query.count.mockResolvedValue(0);
+      prisma.payment.aggregate.mockResolvedValue({ _sum: { totalAmount: null } } as any);
+
+      const result = await service.getOemDashboard('user-1');
+
+      expect(result.totalPayments).toBe(0);
+    });
+
+    it('should identify expiring certificates within 60 days', async () => {
+      const now = new Date();
+      const thirtyDaysLater = new Date();
+      thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+
+      const mockCerts = [
+        { id: 'cert-1', certificateNumber: 'CERT-001', status: CertificateStatus.ACTIVE, validUntil: thirtyDaysLater },
+        { id: 'cert-2', certificateNumber: 'CERT-002', status: CertificateStatus.ACTIVE, validUntil: new Date('2030-01-01') },
+      ];
+
+      prisma.application.findMany.mockResolvedValue([]);
+      prisma.certificate.findMany.mockResolvedValue(mockCerts as any);
+      prisma.query.count.mockResolvedValue(0);
+      prisma.payment.aggregate.mockResolvedValue({ _sum: { totalAmount: null } } as any);
+
+      const result = await service.getOemDashboard('user-1');
+
+      expect(result.certificates.expiring).toHaveLength(1);
+      expect(result.certificates.expiring[0].id).toBe('cert-1');
+    });
+
+    it('should not flag expired certificates as expiring', async () => {
+      const pastDate = new Date();
+      pastDate.setDate(pastDate.getDate() - 10);
+
+      const mockCerts = [
+        { id: 'cert-1', certificateNumber: 'CERT-001', status: CertificateStatus.ACTIVE, validUntil: pastDate },
+      ];
+
+      prisma.application.findMany.mockResolvedValue([]);
+      prisma.certificate.findMany.mockResolvedValue(mockCerts as any);
+      prisma.query.count.mockResolvedValue(0);
+      prisma.payment.aggregate.mockResolvedValue({ _sum: { totalAmount: null } } as any);
+
+      const result = await service.getOemDashboard('user-1');
+
+      expect(result.certificates.expiring).toHaveLength(0);
+    });
+
+    it('should query only OPEN queries for the user', async () => {
+      prisma.application.findMany.mockResolvedValue([]);
+      prisma.certificate.findMany.mockResolvedValue([]);
+      prisma.query.count.mockResolvedValue(3);
+      prisma.payment.aggregate.mockResolvedValue({ _sum: { totalAmount: null } } as any);
+
+      await service.getOemDashboard('user-1');
+
+      expect(prisma.query.count).toHaveBeenCalledWith({
+        where: {
+          application: { applicantId: 'user-1' },
+          status: QueryStatus.OPEN,
+        },
+      });
+    });
+  });
+
+  // =========================================================================
+  // getOfficerDashboard()
+  // =========================================================================
+
+  describe('getOfficerDashboard', () => {
+    beforeEach(() => {
+      // Mock getTodayStats sub-queries
+      prisma.application.count.mockResolvedValue(0);
+      prisma.payment.count.mockResolvedValue(0);
+    });
+
+    it('should return applications grouped by status with totals', async () => {
+      prisma.application.groupBy.mockResolvedValue([
+        { status: ApplicationStatus.SUBMITTED, _count: 5 },
+        { status: ApplicationStatus.UNDER_REVIEW, _count: 3 },
+      ] as any);
+      prisma.payment.count.mockResolvedValue(2);
+      prisma.application.findMany.mockResolvedValue([]);
+
+      const result = await service.getOfficerDashboard();
+
+      expect(result.applicationsByStatus[ApplicationStatus.SUBMITTED]).toBe(5);
+      expect(result.applicationsByStatus[ApplicationStatus.UNDER_REVIEW]).toBe(3);
+      expect(result.totalApplications).toBe(8);
+    });
+
+    it('should return pending payment and field verification counts', async () => {
+      prisma.application.groupBy.mockResolvedValue([]);
+      prisma.payment.count.mockResolvedValue(4);
+      // application.count is called for pending field verifications AND today stats
+      prisma.application.count.mockResolvedValue(7);
+      prisma.application.findMany.mockResolvedValue([]);
+
+      const result = await service.getOfficerDashboard();
+
+      expect(result.pendingPayments).toBe(4);
+      expect(result.pendingFieldVerifications).toBe(7);
+    });
+
+    it('should return 0 for pendingCommitteeReview when no committee review apps exist', async () => {
+      prisma.application.groupBy.mockResolvedValue([
+        { status: ApplicationStatus.SUBMITTED, _count: 3 },
+      ] as any);
+      prisma.payment.count.mockResolvedValue(0);
+      prisma.application.findMany.mockResolvedValue([]);
+
+      const result = await service.getOfficerDashboard();
+
+      expect(result.pendingCommitteeReview).toBe(0);
+    });
+  });
+
+  // =========================================================================
+  // getAdminDashboard()
+  // =========================================================================
+
+  describe('getAdminDashboard', () => {
+    beforeEach(() => {
+      // Defaults for all underlying queries
+      prisma.application.groupBy.mockResolvedValue([]);
+      prisma.application.count.mockResolvedValue(0);
+      prisma.application.findMany.mockResolvedValue([]);
+      prisma.payment.count.mockResolvedValue(0);
+      prisma.payment.aggregate.mockResolvedValue({
+        _sum: { totalAmount: null },
+        _count: 0,
+      } as any);
+      prisma.user.count.mockResolvedValue(0);
+      prisma.user.groupBy.mockResolvedValue([]);
+      prisma.certificate.count.mockResolvedValue(0);
+      prisma.certificate.groupBy.mockResolvedValue([]);
+    });
+
+    it('should include officer dashboard data plus user, certificate, and payment stats', async () => {
+      prisma.user.count.mockResolvedValue(100);
+      prisma.user.groupBy.mockResolvedValue([
+        { role: Role.OEM, _count: 80 },
+        { role: Role.OFFICER, _count: 10 },
+      ] as any);
+      prisma.certificate.count.mockResolvedValue(50);
+
+      const result = await service.getAdminDashboard();
+
+      expect(result.userStats).toBeDefined();
+      expect(result.userStats.total).toBe(100);
+      expect(result.certificateStats).toBeDefined();
+      expect(result.paymentStats).toBeDefined();
+      // Also includes officer dashboard fields
+      expect(result.applicationsByStatus).toBeDefined();
+    });
+  });
+
+  // =========================================================================
+  // getFieldVerifierDashboard()
+  // =========================================================================
+
+  describe('getFieldVerifierDashboard', () => {
+    it('should return assigned count, completed count, and upcoming verifications', async () => {
+      prisma.fieldReport.count.mockResolvedValue(5);
+      prisma.fieldReport.findMany.mockResolvedValue([
+        { id: 'report-1', visitDate: new Date('2030-01-01'), application: {} },
+      ] as any);
+
+      const result = await service.getFieldVerifierDashboard('verifier-1');
+
+      expect(result.assignedCount).toBe(5);
+      expect(result.completedCount).toBe(5);
+      expect(result.upcomingVerifications).toHaveLength(1);
+    });
+
+    it('should query reports filtered by verifierId', async () => {
+      prisma.fieldReport.count.mockResolvedValue(0);
+      prisma.fieldReport.findMany.mockResolvedValue([]);
+
+      await service.getFieldVerifierDashboard('verifier-1');
+
+      expect(prisma.fieldReport.count).toHaveBeenCalledWith({
+        where: { verifierId: 'verifier-1' },
+      });
+    });
+  });
+
+  // =========================================================================
+  // getCommitteeDashboard()
+  // =========================================================================
+
+  describe('getCommitteeDashboard', () => {
+    it('should return pending review count, my evaluations, and apps for review', async () => {
+      prisma.application.count.mockResolvedValue(3);
+      prisma.committeeEvaluation.count.mockResolvedValue(2);
+      prisma.application.findMany.mockResolvedValue([
+        {
+          id: 'app-1',
+          oemProfile: { companyName: 'Company A' },
+          evaluations: [{ id: 'eval-1' }],
+        },
+        {
+          id: 'app-2',
+          oemProfile: { companyName: 'Company B' },
+          evaluations: [],
+        },
+      ] as any);
+
+      const result = await service.getCommitteeDashboard('member-1');
+
+      expect(result.pendingReview).toBe(3);
+      expect(result.myEvaluations).toBe(2);
+      expect(result.applicationsForReview).toHaveLength(2);
+      expect(result.applicationsForReview[0].hasMyEvaluation).toBe(true);
+      expect(result.applicationsForReview[1].hasMyEvaluation).toBe(false);
+    });
+
+    it('should query evaluations filtered by evaluatorId', async () => {
+      prisma.application.count.mockResolvedValue(0);
+      prisma.committeeEvaluation.count.mockResolvedValue(0);
+      prisma.application.findMany.mockResolvedValue([]);
+
+      await service.getCommitteeDashboard('member-1');
+
+      expect(prisma.committeeEvaluation.count).toHaveBeenCalledWith({
+        where: { evaluatorId: 'member-1' },
+      });
+    });
+  });
+
+  // =========================================================================
+  // getDealingHandDashboard()
+  // =========================================================================
+
+  describe('getDealingHandDashboard', () => {
+    it('should return pending lab bills, uploaded lab bills, payment queries, and recent applications', async () => {
+      prisma.application.count.mockResolvedValue(3);
+      prisma.attachment.count.mockResolvedValue(10);
+      prisma.payment.count.mockResolvedValue(2);
+      prisma.application.findMany.mockResolvedValue([
+        { id: 'app-1', status: ApplicationStatus.LAB_TESTING },
+      ] as any);
+
+      const result = await service.getDealingHandDashboard();
+
+      expect(result.pendingLabBills).toBe(3);
+      expect(result.uploadedLabBills).toBe(10);
+      expect(result.paymentQueries).toBe(2);
+      expect(result.recentApplications).toHaveLength(1);
+    });
+
+    it('should query lab test report attachments', async () => {
+      prisma.application.count.mockResolvedValue(0);
+      prisma.attachment.count.mockResolvedValue(0);
+      prisma.payment.count.mockResolvedValue(0);
+      prisma.application.findMany.mockResolvedValue([]);
+
+      await service.getDealingHandDashboard();
+
+      expect(prisma.attachment.count).toHaveBeenCalledWith({
+        where: { documentType: 'LAB_TEST_REPORT' },
+      });
+    });
+
+    it('should query VERIFICATION_PENDING payments', async () => {
+      prisma.application.count.mockResolvedValue(0);
+      prisma.attachment.count.mockResolvedValue(0);
+      prisma.payment.count.mockResolvedValue(0);
+      prisma.application.findMany.mockResolvedValue([]);
+
+      await service.getDealingHandDashboard();
+
+      expect(prisma.payment.count).toHaveBeenCalledWith({
+        where: { status: PaymentStatus.VERIFICATION_PENDING },
+      });
+    });
+  });
+});
