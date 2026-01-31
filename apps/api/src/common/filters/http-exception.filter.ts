@@ -1,10 +1,4 @@
-import {
-  ExceptionFilter,
-  Catch,
-  ArgumentsHost,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
 
 @Catch()
@@ -34,13 +28,23 @@ export class HttpExceptionFilter implements ExceptionFilter {
       console.error('Unhandled exception:', exception.stack);
     }
 
-    response.status(status).json({
+    const body: Record<string, unknown> = {
       success: false,
       statusCode: status,
       error,
       message,
       path: request.url,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    // Pass through validation errors array if present
+    if (exception instanceof HttpException) {
+      const resp = exception.getResponse();
+      if (typeof resp === 'object' && resp !== null && 'errors' in resp) {
+        body.errors = (resp as Record<string, unknown>).errors;
+      }
+    }
+
+    response.status(status).json(body);
   }
 }

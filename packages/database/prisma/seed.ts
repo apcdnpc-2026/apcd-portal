@@ -1,5 +1,5 @@
 import { PrismaClient, APCDCategory, PaymentType, Role } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
 import { seedDummyData } from './seed-dummy-data';
 
