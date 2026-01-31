@@ -179,31 +179,106 @@ export class AuthService {
       throw new ForbiddenException('Invalid seed secret');
     }
 
-    const testUsers = [
-      { email: 'admin@npcindia.gov.in', password: 'Admin@APCD2025!' },
-      { email: 'officer@npcindia.gov.in', password: 'Officer@APCD2025!' },
-      { email: 'head@npcindia.gov.in', password: 'Head@APCD2025!' },
-      { email: 'committee@npcindia.gov.in', password: 'Committee@APCD2025!' },
-      { email: 'fieldverifier@npcindia.gov.in', password: 'Field@APCD2025!' },
-      { email: 'dealinghand@npcindia.gov.in', password: 'Dealing@APCD2025!' },
-      { email: 'oem@testcompany.com', password: 'Oem@APCD2025!' },
+    const testUsers: {
+      email: string;
+      password: string;
+      role: Role;
+      firstName: string;
+      lastName: string;
+    }[] = [
+      {
+        email: 'admin@npcindia.gov.in',
+        password: 'Admin@APCD2025!',
+        role: Role.SUPER_ADMIN,
+        firstName: 'System',
+        lastName: 'Administrator',
+      },
+      {
+        email: 'officer@npcindia.gov.in',
+        password: 'Officer@APCD2025!',
+        role: Role.OFFICER,
+        firstName: 'Test',
+        lastName: 'Officer',
+      },
+      {
+        email: 'head@npcindia.gov.in',
+        password: 'Head@APCD2025!',
+        role: Role.ADMIN,
+        firstName: 'Head',
+        lastName: 'Officer',
+      },
+      {
+        email: 'committee@npcindia.gov.in',
+        password: 'Committee@APCD2025!',
+        role: Role.COMMITTEE,
+        firstName: 'Committee',
+        lastName: 'Member',
+      },
+      {
+        email: 'fieldverifier@npcindia.gov.in',
+        password: 'Field@APCD2025!',
+        role: Role.FIELD_VERIFIER,
+        firstName: 'Field',
+        lastName: 'Verifier',
+      },
+      {
+        email: 'dealinghand@npcindia.gov.in',
+        password: 'Dealing@APCD2025!',
+        role: Role.DEALING_HAND,
+        firstName: 'Dealing',
+        lastName: 'Hand',
+      },
+      {
+        email: 'oem@testcompany.com',
+        password: 'Oem@APCD2025!',
+        role: Role.OEM,
+        firstName: 'Test',
+        lastName: 'OEM',
+      },
     ];
 
-    const results: { email: string; updated: boolean }[] = [];
+    const results: { email: string; action: string }[] = [];
     for (const u of testUsers) {
-      const user = await this.prisma.user.findUnique({ where: { email: u.email } });
-      if (user) {
-        const hash = await bcrypt.hash(u.password, 12);
-        await this.prisma.user.update({
-          where: { id: user.id },
-          data: { passwordHash: hash },
-        });
-        results.push({ email: u.email, updated: true });
-      } else {
-        results.push({ email: u.email, updated: false });
-      }
+      const hash = await bcrypt.hash(u.password, 12);
+      await this.prisma.user.upsert({
+        where: { email: u.email },
+        update: { passwordHash: hash },
+        create: {
+          email: u.email,
+          passwordHash: hash,
+          role: u.role,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          isActive: true,
+          isVerified: true,
+        },
+      });
+      results.push({ email: u.email, action: 'upserted' });
     }
-    return { message: 'Test passwords reset', results };
+
+    // Ensure OEM profile exists for test OEM
+    const oemUser = await this.prisma.user.findUnique({
+      where: { email: 'oem@testcompany.com' },
+    });
+    if (oemUser) {
+      await this.prisma.oemProfile.upsert({
+        where: { userId: oemUser.id },
+        update: {},
+        create: {
+          userId: oemUser.id,
+          companyName: 'Test APCD Manufacturing Pvt Ltd',
+          fullAddress: '123, Industrial Area, Phase-II, New Delhi, Delhi - 110020',
+          state: 'Delhi',
+          pinCode: '110020',
+          contactNo: '9876543210',
+          gstRegistrationNo: '07AABCT1234F1ZP',
+          panNo: 'AABCT1234F',
+          firmType: 'PRIVATE_LIMITED',
+        },
+      });
+    }
+
+    return { message: 'Test passwords reset', count: results.length, results };
   }
 
   /**

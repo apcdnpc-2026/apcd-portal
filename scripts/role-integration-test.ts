@@ -535,12 +535,12 @@ async function phase0_Authentication() {
       },
     });
     if (res.status === 200) {
-      const results = res.body?.results || [];
-      const updated = results.filter((r: { updated: boolean }) => r.updated).length;
-      console.log(`        ${dim(`Passwords reset: ${updated}/${results.length} users`)}`);
+      const body = res.body?.data || res.body;
+      const count = body?.count || body?.results?.length || 0;
+      console.log(`        ${dim(`Passwords upserted: ${count} users`)}`);
     } else {
       console.log(
-        `        ${dim(`Password reset not available (${res.status}) — using existing passwords`)}`,
+        `        ${dim(`Password reset endpoint: ${res.status} — ${res.text?.substring(0, 100)}`)}`,
       );
     }
   });
@@ -1186,7 +1186,9 @@ async function phase6_AdminChecks() {
   });
 
   await test('Admin dashboard loads', async () => {
-    const res = await authFetch(adminRole, '/api/dashboard/admin');
+    // Dashboard requires ADMIN role (head), not SUPER_ADMIN (admin)
+    const dashRole = state.tokens.head ? 'head' : adminRole;
+    const res = await authFetch(dashRole, '/api/dashboard/admin');
     assert(res.status === 200, `Admin dashboard failed: ${res.status}`);
   });
 }
