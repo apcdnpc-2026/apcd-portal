@@ -17,7 +17,7 @@ const PUBLIC_ROUTES = [
 
 // Routes accessible per role
 const ROLE_ROUTES: Record<string, string[]> = {
-  OEM: ['/dashboard/oem', '/applications', '/profile', '/payments', '/certificates'],
+  OEM: ['/dashboard/oem', '/applications', '/profile', '/payments', '/certificates', '/queries'],
   OFFICER: [
     '/dashboard/officer',
     '/verification',

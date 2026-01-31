@@ -42,6 +42,7 @@ const menuItems: Record<string, { label: string; href: string; icon: any }[]> = 
     { label: 'My Applications', href: '/applications', icon: FileText },
     { label: 'Payments', href: '/payments', icon: CreditCard },
     { label: 'Certificates', href: '/certificates', icon: Award },
+    { label: 'Queries', href: '/queries', icon: MessageSquare },
     { label: 'Profile', href: '/profile', icon: Users },
   ],
   OFFICER: [
