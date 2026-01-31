@@ -37,6 +37,24 @@ const mockProfileStartup = {
   isLocalSupplier: false,
 };
 
+const mockProfileLocalSupplier = {
+  id: 'profile-4',
+  userId: 'user-4',
+  companyName: 'Local Supplier Ltd',
+  isMSE: false,
+  isStartup: false,
+  isLocalSupplier: true,
+};
+
+const mockProfileAllDiscounts = {
+  id: 'profile-5',
+  userId: 'user-5',
+  companyName: 'All Discounts Corp',
+  isMSE: true,
+  isStartup: true,
+  isLocalSupplier: true,
+};
+
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
@@ -116,6 +134,29 @@ describe('FeeCalculatorService', () => {
       expect(result.empanelmentFee.totalAmount).toBe(130390);
     });
 
+    it('should apply 15% discount for local supplier profile', async () => {
+      prisma.applicationApcd.count.mockResolvedValue(1);
+      prisma.oemProfile.findFirst.mockResolvedValue(mockProfileLocalSupplier as any);
+
+      const result = await service.calculateForApplication('app-1', 'user-4');
+
+      expect(result.isDiscountEligible).toBe(true);
+      expect(result.applicationFee.discountPercent).toBe(15);
+      expect(result.empanelmentFee.discountPercent).toBe(15);
+    });
+
+    it('should still apply only 15% discount when all discount flags are true (no stacking)', async () => {
+      prisma.applicationApcd.count.mockResolvedValue(1);
+      prisma.oemProfile.findFirst.mockResolvedValue(mockProfileAllDiscounts as any);
+
+      const result = await service.calculateForApplication('app-1', 'user-5');
+
+      expect(result.isDiscountEligible).toBe(true);
+      // Discount is still 15%, not 45%
+      expect(result.applicationFee.discountPercent).toBe(15);
+      expect(result.applicationFee.discountAmount).toBe(3750);
+    });
+
     it('should use minimum 1 APCD type when count is 0', async () => {
       prisma.applicationApcd.count.mockResolvedValue(0);
       prisma.oemProfile.findFirst.mockResolvedValue(mockProfileNoDiscount as any);
@@ -124,11 +165,23 @@ describe('FeeCalculatorService', () => {
 
       // Should use Math.max(0, 1) = 1 for empanelment quantity
       expect(result.empanelmentFee.quantity).toBe(1);
+      expect(result.empanelmentFee.subtotal).toBe(65000);
     });
 
     it('should not be discount eligible when profile is null', async () => {
       prisma.applicationApcd.count.mockResolvedValue(1);
       prisma.oemProfile.findFirst.mockResolvedValue(null);
+
+      const result = await service.calculateForApplication('app-1', 'user-1');
+
+      expect(result.isDiscountEligible).toBe(false);
+      expect(result.applicationFee.discountPercent).toBe(0);
+      expect(result.empanelmentFee.discountPercent).toBe(0);
+    });
+
+    it('should not be discount eligible when all discount flags are false', async () => {
+      prisma.applicationApcd.count.mockResolvedValue(1);
+      prisma.oemProfile.findFirst.mockResolvedValue(mockProfileNoDiscount as any);
 
       const result = await service.calculateForApplication('app-1', 'user-1');
 
@@ -148,6 +201,69 @@ describe('FeeCalculatorService', () => {
       expect(result.empanelmentFee.subtotal).toBe(325000);
       expect(result.grandTotal).toBe(29500 + 383500);
     });
+
+    it('should handle single APCD type correctly', async () => {
+      prisma.applicationApcd.count.mockResolvedValue(1);
+      prisma.oemProfile.findFirst.mockResolvedValue(mockProfileNoDiscount as any);
+
+      const result = await service.calculateForApplication('app-1', 'user-1');
+
+      // Application: 25000 + 4500 GST = 29500
+      // Empanelment: 65000 + 11700 GST = 76700
+      expect(result.applicationFee.totalAmount).toBe(29500);
+      expect(result.empanelmentFee.totalAmount).toBe(76700);
+      expect(result.grandTotal).toBe(106200);
+    });
+
+    it('should handle large APCD count (10 types)', async () => {
+      prisma.applicationApcd.count.mockResolvedValue(10);
+      prisma.oemProfile.findFirst.mockResolvedValue(mockProfileNoDiscount as any);
+
+      const result = await service.calculateForApplication('app-1', 'user-1');
+
+      // Empanelment: 65000 * 10 = 650000 + 18% GST = 767000
+      expect(result.empanelmentFee.quantity).toBe(10);
+      expect(result.empanelmentFee.subtotal).toBe(650000);
+      expect(result.empanelmentFee.gstAmount).toBe(117000);
+      expect(result.empanelmentFee.totalAmount).toBe(767000);
+    });
+
+    it('should calculate discounted fees for 5 products with MSE', async () => {
+      prisma.applicationApcd.count.mockResolvedValue(5);
+      prisma.oemProfile.findFirst.mockResolvedValue(mockProfileMSE as any);
+
+      const result = await service.calculateForApplication('app-1', 'user-2');
+
+      // Application: 25000 - 3750 = 21250, + 3825 GST = 25075
+      // Empanelment: 325000 - 48750 = 276250, + 49725 GST = 325975
+      expect(result.applicationFee.totalAmount).toBe(25075);
+      expect(result.empanelmentFee.subtotal).toBe(325000);
+      expect(result.empanelmentFee.discountAmount).toBe(48750);
+      expect(result.empanelmentFee.amountAfterDiscount).toBe(276250);
+      expect(result.grandTotal).toBe(25075 + 325975);
+    });
+
+    it('should query applicationApcd with correct applicationId', async () => {
+      prisma.applicationApcd.count.mockResolvedValue(1);
+      prisma.oemProfile.findFirst.mockResolvedValue(null);
+
+      await service.calculateForApplication('my-app-id', 'user-1');
+
+      expect(prisma.applicationApcd.count).toHaveBeenCalledWith({
+        where: { applicationId: 'my-app-id', seekingEmpanelment: true },
+      });
+    });
+
+    it('should query oemProfile with correct userId', async () => {
+      prisma.applicationApcd.count.mockResolvedValue(1);
+      prisma.oemProfile.findFirst.mockResolvedValue(null);
+
+      await service.calculateForApplication('app-1', 'my-user-id');
+
+      expect(prisma.oemProfile.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'my-user-id' },
+      });
+    });
   });
 
   // =========================================================================
@@ -161,6 +277,8 @@ describe('FeeCalculatorService', () => {
       expect(result.baseAmount).toBe(25000);
       expect(result.subtotal).toBe(25000);
       expect(result.discountPercent).toBe(0);
+      expect(result.discountAmount).toBe(0);
+      expect(result.amountAfterDiscount).toBe(25000);
       expect(result.gstAmount).toBe(4500);
       expect(result.totalAmount).toBe(29500);
     });
@@ -171,6 +289,7 @@ describe('FeeCalculatorService', () => {
       expect(result.discountPercent).toBe(15);
       expect(result.discountAmount).toBe(3750);
       expect(result.amountAfterDiscount).toBe(21250);
+      expect(result.gstAmount).toBe(3825);
       expect(result.totalAmount).toBe(25075);
     });
 
@@ -182,6 +301,18 @@ describe('FeeCalculatorService', () => {
       expect(result.subtotal).toBe(195000);
       expect(result.gstAmount).toBe(35100);
       expect(result.totalAmount).toBe(230100);
+    });
+
+    it('should calculate EMPANELMENT_FEE with discount for multiple items', () => {
+      const result = service.calculateSingleFee('EMPANELMENT_FEE' as any, 3, true);
+
+      // 195000 - 15% = 165750, + 18% GST = 29835, total = 195585
+      expect(result.subtotal).toBe(195000);
+      expect(result.discountPercent).toBe(15);
+      expect(result.discountAmount).toBe(29250);
+      expect(result.amountAfterDiscount).toBe(165750);
+      expect(result.gstAmount).toBe(29835);
+      expect(result.totalAmount).toBe(195585);
     });
 
     it('should calculate FIELD_VERIFICATION fee without discount even when eligible', () => {
@@ -207,10 +338,52 @@ describe('FeeCalculatorService', () => {
       expect(result.totalAmount).toBe(35105);
     });
 
+    it('should calculate ANNUAL_RENEWAL without discount when not eligible', () => {
+      const result = service.calculateSingleFee('ANNUAL_RENEWAL' as any, 1, false);
+
+      expect(result.baseAmount).toBe(35000);
+      expect(result.discountPercent).toBe(0);
+      expect(result.gstAmount).toBe(6300);
+      expect(result.totalAmount).toBe(41300);
+    });
+
     it('should return 0 total for EMISSION_TESTING (charged on actuals)', () => {
       const result = service.calculateSingleFee('EMISSION_TESTING' as any, 1, false);
 
       expect(result.baseAmount).toBe(0);
+      expect(result.subtotal).toBe(0);
+      expect(result.gstAmount).toBe(0);
+      expect(result.totalAmount).toBe(0);
+    });
+
+    it('should return 0 total for SURVEILLANCE_VISIT (charged on actuals)', () => {
+      const result = service.calculateSingleFee('SURVEILLANCE_VISIT' as any, 1, false);
+
+      expect(result.baseAmount).toBe(0);
+      expect(result.subtotal).toBe(0);
+      expect(result.totalAmount).toBe(0);
+    });
+
+    it('should handle quantity of 1 for EMPANELMENT_FEE', () => {
+      const result = service.calculateSingleFee('EMPANELMENT_FEE' as any, 1, false);
+
+      expect(result.quantity).toBe(1);
+      expect(result.subtotal).toBe(65000);
+      expect(result.gstAmount).toBe(11700);
+      expect(result.totalAmount).toBe(76700);
+    });
+
+    it('should not apply discount on EMISSION_TESTING even when eligible', () => {
+      const result = service.calculateSingleFee('EMISSION_TESTING' as any, 1, true);
+
+      expect(result.discountPercent).toBe(0);
+      expect(result.totalAmount).toBe(0);
+    });
+
+    it('should not apply discount on SURVEILLANCE_VISIT even when eligible', () => {
+      const result = service.calculateSingleFee('SURVEILLANCE_VISIT' as any, 1, true);
+
+      expect(result.discountPercent).toBe(0);
       expect(result.totalAmount).toBe(0);
     });
   });

@@ -1,49 +1,43 @@
 import { test, expect } from '@playwright/test';
 
-import { loginAs } from './helpers/auth';
+import { loginAs, waitForLoad } from './helpers/auth';
 
 /**
  * Committee Member Journey - End-to-End Tests
  *
- * Tests the committee workflow:
- *   Login -> View Pending Evaluations -> Open Application -> Fill Scoring -> Submit
+ * Covers:
+ *   1. Login -> committee dashboard
+ *   2. View pending evaluations list (/committee/pending)
+ *   3. Open evaluation form -> verify all 8 scoring criteria
+ *   4. Fill scores, select recommendation, enter remarks
+ *   5. Submit evaluation with passing scores
+ *   6. Submit evaluation with failing scores (reject recommendation)
+ *   7. Verify total score calculation
  */
 
 test.describe('Committee Member Journey', () => {
-  test.describe.configure({ mode: 'serial' });
+  // ── Dashboard ──────────────────────────────────────────────────────────
 
-  test('should login as committee member and see the committee dashboard', async ({ page }) => {
+  test('committee dashboard loads successfully', async ({ page }) => {
     await loginAs(page, 'committee');
 
-    // Should land on committee dashboard
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-
-    // Dashboard should render without errors
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
+    await waitForLoad(page);
   });
 
-  test('should view pending evaluations list', async ({ page }) => {
+  // ── Pending Evaluations ────────────────────────────────────────────────
+
+  test('pending evaluations list shows applications or empty state', async ({ page }) => {
     await loginAs(page, 'committee');
     await page.goto('/committee/pending');
 
-    // Verify page heading
     await expect(page.getByRole('heading', { name: /pending committee review/i })).toBeVisible();
+    await waitForLoad(page);
 
-    // Wait for loading to complete
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
-
-    // Should show either application cards or empty state
     const evaluateLinks = page.getByRole('link', { name: /evaluate/i });
     const emptyMessage = page.getByText(/no applications pending review/i);
 
-    const hasApplications = (await evaluateLinks.count()) > 0;
-
-    if (hasApplications) {
-      // Verify card structure: application number, company name, Evaluate button
+    if ((await evaluateLinks.count()) > 0) {
       const firstCard = page.locator('[class*="hover:shadow-md"]').first();
       await expect(firstCard.locator('.font-medium').first()).toBeVisible();
       await expect(firstCard.getByRole('link', { name: /evaluate/i })).toBeVisible();
@@ -52,13 +46,12 @@ test.describe('Committee Member Journey', () => {
     }
   });
 
-  test('should open an application for evaluation and see the scoring form', async ({ page }) => {
+  // ── Evaluation Form ────────────────────────────────────────────────────
+
+  test('evaluation form shows all 8 scoring criteria', async ({ page }) => {
     await loginAs(page, 'committee');
     await page.goto('/committee/pending');
-
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
+    await waitForLoad(page);
 
     const evaluateLinks = page.getByRole('link', { name: /evaluate/i });
     if ((await evaluateLinks.count()) === 0) {
@@ -66,20 +59,14 @@ test.describe('Committee Member Journey', () => {
       return;
     }
 
-    // Click first Evaluate link
     await evaluateLinks.first().click();
     await page.waitForURL(/\/committee\/evaluate\//, { timeout: 10000 });
 
-    // Verify evaluation page header
     await expect(page.getByRole('heading', { name: /committee evaluation/i })).toBeVisible();
-
-    // Verify Application Summary card
     await expect(page.getByText(/application summary/i)).toBeVisible();
-
-    // Verify Evaluation Scoring section
     await expect(page.getByText(/evaluation scoring/i)).toBeVisible();
 
-    // Verify all 8 scoring criteria are displayed
+    // All 8 criteria must be visible
     const criteria = [
       'Experience & Scope of Supply',
       'Technical Specification of APCDs',
@@ -95,20 +82,18 @@ test.describe('Committee Member Journey', () => {
       await expect(page.getByText(criterion)).toBeVisible();
     }
 
-    // Verify recommendation select is visible
     await expect(page.getByText(/recommendation/i)).toBeVisible();
-
-    // Verify Submit button is present
     await expect(page.getByRole('button', { name: /submit evaluation/i })).toBeVisible();
   });
 
-  test('should fill the scoring form with values and submit evaluation', async ({ page }) => {
+  // ── Submit with Passing Scores ─────────────────────────────────────────
+
+  test('fill passing scores and submit evaluation with Approve recommendation', async ({
+    page,
+  }) => {
     await loginAs(page, 'committee');
     await page.goto('/committee/pending');
-
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
+    await waitForLoad(page);
 
     const evaluateLinks = page.getByRole('link', { name: /evaluate/i });
     if ((await evaluateLinks.count()) === 0) {
@@ -119,43 +104,91 @@ test.describe('Committee Member Journey', () => {
     await evaluateLinks.first().click();
     await page.waitForURL(/\/committee\/evaluate\//, { timeout: 10000 });
 
-    // Wait for scoring form to load
-    await expect(page.getByText(/evaluation scoring/i)).toBeVisible({
-      timeout: 10000,
-    });
+    await expect(page.getByText(/evaluation scoring/i)).toBeVisible({ timeout: 10000 });
 
-    // Fill scores for all 8 criteria (score input fields are type="number" with class w-20)
+    // Fill 8 criteria with passing scores (total >= 60 out of 80)
     const scoreInputs = page.locator('input[type="number"].w-20');
+    const scores = [9, 8, 9, 8, 9, 8, 8, 7]; // Total: 66/80
     const scoreCount = await scoreInputs.count();
 
-    const scores = [8, 7, 9, 7, 8, 6, 7, 5]; // Values for 8 criteria
     for (let i = 0; i < Math.min(scoreCount, scores.length); i++) {
       await scoreInputs.nth(i).fill('');
       await scoreInputs.nth(i).fill(String(scores[i]));
     }
 
-    // Verify total score updates (sum = 57)
+    // Verify total score is calculated
     const expectedTotal = scores.reduce((sum, s) => sum + s, 0);
     await expect(page.getByText(new RegExp(`${expectedTotal}\\s*/\\s*80`))).toBeVisible();
 
-    // Select recommendation: Approve
-    const recommendationTrigger = page
+    // Select Approve recommendation
+    const recommendTrigger = page
       .locator('button')
       .filter({ hasText: /select your recommendation/i });
-    await recommendationTrigger.click();
+    await recommendTrigger.click();
     await page.getByRole('option', { name: /approve/i }).click();
 
-    // Fill overall remarks
+    // Fill remarks
     await page
       .getByPlaceholder(/provide overall assessment/i)
       .fill(
-        'E2E Test evaluation: Company meets technical and quality standards. Recommend approval for empanelment.',
+        'E2E Test: Company meets all technical and quality standards. Full approval recommended.',
       );
 
-    // Submit evaluation
     await page.getByRole('button', { name: /submit evaluation/i }).click();
 
-    // Should redirect to committee page or show success
+    await Promise.race([
+      page.waitForURL(/\/committee/, { timeout: 15000 }),
+      expect(page.getByText(/evaluation submitted successfully/i)).toBeVisible({ timeout: 15000 }),
+    ]);
+  });
+
+  // ── Submit with Failing Scores ─────────────────────────────────────────
+
+  test('fill failing scores and submit evaluation with Reject recommendation', async ({
+    page,
+  }) => {
+    await loginAs(page, 'committee');
+    await page.goto('/committee/pending');
+    await waitForLoad(page);
+
+    const evaluateLinks = page.getByRole('link', { name: /evaluate/i });
+    if ((await evaluateLinks.count()) === 0) {
+      test.skip(true, 'No applications pending committee evaluation');
+      return;
+    }
+
+    await evaluateLinks.first().click();
+    await page.waitForURL(/\/committee\/evaluate\//, { timeout: 10000 });
+
+    await expect(page.getByText(/evaluation scoring/i)).toBeVisible({ timeout: 10000 });
+
+    // Fill 8 criteria with failing scores (total < 60 out of 80)
+    const scoreInputs = page.locator('input[type="number"].w-20');
+    const scores = [4, 3, 5, 4, 3, 4, 3, 2]; // Total: 28/80
+    const scoreCount = await scoreInputs.count();
+
+    for (let i = 0; i < Math.min(scoreCount, scores.length); i++) {
+      await scoreInputs.nth(i).fill('');
+      await scoreInputs.nth(i).fill(String(scores[i]));
+    }
+
+    // Verify total score
+    const expectedTotal = scores.reduce((sum, s) => sum + s, 0);
+    await expect(page.getByText(new RegExp(`${expectedTotal}\\s*/\\s*80`))).toBeVisible();
+
+    // Select Reject recommendation
+    const recommendTrigger = page
+      .locator('button')
+      .filter({ hasText: /select your recommendation/i });
+    await recommendTrigger.click();
+    await page.getByRole('option', { name: /reject/i }).click();
+
+    await page
+      .getByPlaceholder(/provide overall assessment/i)
+      .fill('E2E Test: Company does not meet minimum technical requirements.');
+
+    await page.getByRole('button', { name: /submit evaluation/i }).click();
+
     await Promise.race([
       page.waitForURL(/\/committee/, { timeout: 15000 }),
       expect(page.getByText(/evaluation submitted successfully/i)).toBeVisible({ timeout: 15000 }),

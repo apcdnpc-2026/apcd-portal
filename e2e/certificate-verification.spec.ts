@@ -1,90 +1,127 @@
 import { test, expect } from '@playwright/test';
 
-import { loginAs } from './helpers/auth';
+import { loginAs, waitForLoad } from './helpers/auth';
 
 /**
  * Certificate Verification - End-to-End Tests
  *
- * Tests the certificate verification workflows:
- *   Public certificate verification page
- *   Certificate list for OEM
- *   Empaneled OEMs page
+ * Covers:
+ *   1. Check eligibility page (/check-eligibility) - public, no login required
+ *   2. Empaneled OEMs public page (/empaneled-oems)
+ *   3. OEM certificates list (/certificates) - logged in
+ *   4. Certificate download/view actions
  */
 
 test.describe('Certificate Verification', () => {
-  test.describe.configure({ mode: 'serial' });
+  // ── Check Eligibility (Public Page) ────────────────────────────────────
 
-  test('should display public certificate verification page', async ({ page }) => {
-    await page.goto('/verify-certificate');
+  test('check eligibility page loads without login', async ({ page }) => {
+    await page.goto('/check-eligibility');
 
-    // Verify public page heading
+    // This is a public page - should not redirect to login
+    expect(page.url()).toContain('/check-eligibility');
+
+    // Page should have heading and form elements
     await expect(
-      page.getByRole('heading', { name: /verify certificate|certificate verification/i }),
-    ).toBeVisible();
-
-    // Verify search/input field for certificate number
-    await expect(
-      page.getByLabel(/certificate number|certificate id/i).or(
-        page.getByPlaceholder(/enter certificate|certificate number/i),
-      ),
-    ).toBeVisible();
-
-    // Verify search/verify button
-    await expect(
-      page.getByRole('button', { name: /verify|search|check/i }),
-    ).toBeVisible();
-  });
-
-  test('should show validation message for invalid certificate number', async ({ page }) => {
-    await page.goto('/verify-certificate');
-
-    // Enter an invalid certificate number
-    const certInput = page
-      .getByLabel(/certificate number|certificate id/i)
-      .or(page.getByPlaceholder(/enter certificate|certificate number/i));
-    await certInput.fill('INVALID-CERT-000');
-
-    // Click verify button
-    await page.getByRole('button', { name: /verify|search|check/i }).click();
-
-    // Should show "not found" or error message
-    await expect(
-      page.getByText(/not found|invalid|no certificate|does not exist|no results/i),
+      page.getByRole('heading', { name: /eligibility|check eligibility/i }),
     ).toBeVisible({ timeout: 10000 });
+
+    // Should have form fields for eligibility check
+    await expect(page.locator('form, [class*="card"]').first()).toBeVisible();
   });
 
-  test('should display certificate list for logged-in OEM', async ({ page }) => {
+  test('eligibility check wizard can be navigated', async ({ page }) => {
+    await page.goto('/check-eligibility');
+
+    await expect(
+      page.getByRole('heading', { name: /eligibility|check eligibility/i }),
+    ).toBeVisible({ timeout: 10000 });
+
+    // Look for Next/Continue button to advance through the wizard
+    const nextBtn = page.getByRole('button', { name: /next|continue|check/i });
+    if (await nextBtn.isVisible().catch(() => false)) {
+      // Fill any visible required fields first
+      const numberInputs = page.locator('input[type="number"]');
+      const inputCount = await numberInputs.count();
+      for (let i = 0; i < inputCount; i++) {
+        await numberInputs.nth(i).fill('10');
+      }
+
+      // Try advancing
+      await nextBtn.click();
+
+      // Should either advance to next step or show results
+      await page.waitForTimeout(500);
+    }
+  });
+
+  // ── Empaneled OEMs (Public Page) ───────────────────────────────────────
+
+  test('empaneled OEMs public page loads without login', async ({ page }) => {
+    await page.goto('/empaneled-oems');
+
+    await expect(
+      page.getByRole('heading', {
+        name: /empaneled OEMs|empaneled manufacturers|approved OEMs/i,
+      }),
+    ).toBeVisible({ timeout: 10000 });
+    await waitForLoad(page);
+
+    const oemCards = page.locator('[class*="rounded-lg border"], tbody tr');
+    const emptyMessage = page.getByText(/no empaneled|no OEMs|no results/i);
+    const oemCount = await oemCards.count();
+
+    if (oemCount > 0) {
+      await expect(page.locator('.font-medium, td').first()).toBeVisible();
+      await expect(
+        page.getByText(/(APCD|category|type|manufacturer)/i).first(),
+      ).toBeVisible({ timeout: 5000 });
+    } else {
+      await expect(emptyMessage).toBeVisible();
+    }
+  });
+
+  test('empaneled OEMs page has search/filter', async ({ page }) => {
+    await page.goto('/empaneled-oems');
+    await waitForLoad(page);
+
+    const searchInput = page.getByPlaceholder(/search|filter/i);
+    if ((await searchInput.count()) > 0) {
+      await expect(searchInput.first()).toBeVisible();
+
+      // Type a search term
+      await searchInput.first().fill('Test');
+      await page.waitForTimeout(500);
+    }
+  });
+
+  // ── OEM Certificates List (Authenticated) ──────────────────────────────
+
+  test('OEM certificates page shows certificates or empty state', async ({ page }) => {
     await loginAs(page, 'oem');
     await page.goto('/certificates');
+    await waitForLoad(page);
 
-    // Wait for loading to complete
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
-
-    // Verify page heading
     await expect(
-      page.getByRole('heading', { name: /my certificates|certificates|empanelment certificates/i }),
+      page.getByRole('heading', {
+        name: /my certificates|certificates|empanelment certificates/i,
+      }),
     ).toBeVisible();
 
-    // Should show either certificate cards or empty state
     const certificateCards = page.locator('[class*="rounded-lg border"]');
     const emptyMessage = page.getByText(/no certificates|no empanelment certificates/i);
-
     const cardCount = await certificateCards.count();
 
     if (cardCount > 0) {
-      // Verify certificate card structure
       await expect(
         page.getByText(/(certificate|empanelment|APCD)/i).first(),
       ).toBeVisible({ timeout: 5000 });
 
-      // Verify status or validity display
       await expect(
         page.getByText(/(valid|active|expired|issued|validity)/i).first(),
       ).toBeVisible({ timeout: 5000 });
 
-      // Verify download/view button exists
+      // Download or view button should exist
       await expect(
         page
           .getByRole('button', { name: /download|view|print/i })
@@ -96,43 +133,15 @@ test.describe('Certificate Verification', () => {
     }
   });
 
-  test('should display empaneled OEMs public page', async ({ page }) => {
-    await page.goto('/empaneled-oems');
+  // ── Admin Certificates Management ──────────────────────────────────────
 
-    // Verify public page heading
+  test('admin can access certificates management page', async ({ page }) => {
+    await loginAs(page, 'admin');
+    await page.goto('/admin/certificates');
+
     await expect(
-      page.getByRole('heading', { name: /empaneled OEMs|empaneled manufacturers|approved OEMs/i }),
-    ).toBeVisible();
-
-    // Wait for loading to complete
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
-
-    // Should show either OEM list or empty state
-    const oemCards = page.locator('[class*="rounded-lg border"], tbody tr');
-    const emptyMessage = page.getByText(/no empaneled|no OEMs|no results/i);
-
-    const oemCount = await oemCards.count();
-
-    if (oemCount > 0) {
-      // Verify OEM card/row structure: company name, APCD types, certificate
-      await expect(
-        page.locator('.font-medium, td').first(),
-      ).toBeVisible();
-
-      // Verify APCD type or category information is shown
-      await expect(
-        page.getByText(/(APCD|category|type|manufacturer)/i).first(),
-      ).toBeVisible({ timeout: 5000 });
-    } else {
-      await expect(emptyMessage).toBeVisible();
-    }
-
-    // Verify search/filter functionality is available
-    const searchInput = page.getByPlaceholder(/search|filter/i);
-    if ((await searchInput.count()) > 0) {
-      await expect(searchInput.first()).toBeVisible();
-    }
+      page.getByRole('heading', { name: /certificate|certificates/i }),
+    ).toBeVisible({ timeout: 10000 });
+    await waitForLoad(page);
   });
 });

@@ -1,38 +1,39 @@
 import { test, expect } from '@playwright/test';
 
-import { loginAs } from './helpers/auth';
+import { loginAs, waitForLoad } from './helpers/auth';
 
 /**
  * Accessibility - End-to-End Tests
  *
- * Tests basic accessibility requirements:
- *   Keyboard navigation on login page
- *   ARIA labels on form elements
- *   Color contrast basics
- *   Responsive layout (mobile viewport)
+ * Covers:
+ *   1. Keyboard navigation on login page (Tab through fields, Enter to submit)
+ *   2. ARIA labels on login form elements
+ *   3. ARIA labels on registration form elements
+ *   4. Color contrast basics on login page
+ *   5. Responsive layout at mobile viewport (375x667) - login page
+ *   6. Responsive layout at mobile viewport - OEM dashboard
+ *   7. ARIA labels on OEM application page
+ *   8. Focus management - dialog traps focus
  */
 
 test.describe('Accessibility', () => {
-  test('should support keyboard navigation on the login page', async ({ page }) => {
+  // ── Keyboard Navigation ────────────────────────────────────────────────
+
+  test('login page supports full keyboard navigation', async ({ page }) => {
     await page.goto('/login');
     await page.waitForSelector('form');
 
-    // Focus the email input using Tab key from the top of the page
-    // Press Tab multiple times to move through focusable elements
-    await page.keyboard.press('Tab');
-
-    // Continue tabbing until we reach the email field
+    // Tab through focusable elements to find email input
     let maxTabs = 15;
     let emailFocused = false;
+    await page.keyboard.press('Tab');
+
     while (maxTabs > 0) {
       const focusedElement = await page.evaluate(() => {
         const el = document.activeElement;
         return {
           tagName: el?.tagName?.toLowerCase(),
           type: (el as HTMLInputElement)?.type,
-          ariaLabel: el?.getAttribute('aria-label'),
-          id: el?.id,
-          name: (el as HTMLInputElement)?.name,
         };
       });
 
@@ -50,10 +51,10 @@ test.describe('Accessibility', () => {
 
     expect(emailFocused).toBeTruthy();
 
-    // Type in the email field using keyboard
+    // Type email
     await page.keyboard.type('keyboard@test.com');
 
-    // Tab to password field
+    // Tab to password
     await page.keyboard.press('Tab');
 
     const passwordFocused = await page.evaluate(() => {
@@ -65,14 +66,15 @@ test.describe('Accessibility', () => {
     // Type password
     await page.keyboard.type('Test@1234');
 
-    // Tab to the submit button and press Enter
-    await page.keyboard.press('Tab');
-
-    // Keep tabbing until we reach a button
+    // Tab to submit button
     maxTabs = 5;
     let buttonFocused = false;
+    await page.keyboard.press('Tab');
+
     while (maxTabs > 0) {
-      const focusedTag = await page.evaluate(() => document.activeElement?.tagName?.toLowerCase());
+      const focusedTag = await page.evaluate(
+        () => document.activeElement?.tagName?.toLowerCase(),
+      );
       if (focusedTag === 'button') {
         buttonFocused = true;
         break;
@@ -83,51 +85,46 @@ test.describe('Accessibility', () => {
 
     expect(buttonFocused).toBeTruthy();
 
-    // Press Enter to submit the form via keyboard
+    // Press Enter to submit
     await page.keyboard.press('Enter');
 
-    // Should either navigate to dashboard or show an error (depending on credentials)
-    // Either outcome confirms keyboard submission works
+    // Should navigate to dashboard or show error (either confirms keyboard submission works)
     await Promise.race([
       page.waitForURL(/\/dashboard/, { timeout: 10000 }),
-      expect(
-        page.getByText(/invalid|error|incorrect|failed/i),
-      ).toBeVisible({ timeout: 10000 }),
+      expect(page.getByText(/invalid|error|incorrect|failed/i)).toBeVisible({ timeout: 10000 }),
     ]);
   });
 
-  test('should have ARIA labels on login form elements', async ({ page }) => {
+  // ── ARIA Labels: Login ─────────────────────────────────────────────────
+
+  test('login form elements have proper ARIA labels', async ({ page }) => {
     await page.goto('/login');
     await page.waitForSelector('form');
 
-    // Verify email input has an accessible label (via label element, aria-label, or aria-labelledby)
     const emailInput = page.getByLabel(/email/i);
     await expect(emailInput).toBeVisible();
     await expect(emailInput).toHaveAttribute('type', /(email|text)/);
 
-    // Verify password input has an accessible label
     const passwordInput = page.getByLabel(/password/i);
     await expect(passwordInput).toBeVisible();
     await expect(passwordInput).toHaveAttribute('type', 'password');
 
-    // Verify submit button has accessible name
     const submitButton = page.getByRole('button', { name: /login|sign in/i });
     await expect(submitButton).toBeVisible();
 
-    // Verify the form itself is semantically correct
     const formElement = page.locator('form');
     await expect(formElement).toBeVisible();
 
-    // Verify link to registration has accessible text
     const registerLink = page.getByRole('link', { name: /register|create account|sign up/i });
     await expect(registerLink).toBeVisible();
   });
 
-  test('should have ARIA labels on registration form elements', async ({ page }) => {
+  // ── ARIA Labels: Registration ──────────────────────────────────────────
+
+  test('registration form elements have proper ARIA labels', async ({ page }) => {
     await page.goto('/register');
     await page.waitForSelector('form');
 
-    // Verify all registration form fields have accessible labels
     await expect(page.getByLabel(/first name/i)).toBeVisible();
     await expect(page.getByLabel(/last name/i)).toBeVisible();
     await expect(page.getByLabel(/email address/i)).toBeVisible();
@@ -135,21 +132,17 @@ test.describe('Accessibility', () => {
     await expect(page.getByLabel(/^password$/i)).toBeVisible();
     await expect(page.getByLabel(/confirm password/i)).toBeVisible();
 
-    // Verify submit button has accessible name
-    await expect(
-      page.getByRole('button', { name: /create account/i }),
-    ).toBeVisible();
+    await expect(page.getByRole('button', { name: /create account/i })).toBeVisible();
   });
 
-  test('should have sufficient color contrast on key elements', async ({ page }) => {
+  // ── Color Contrast ─────────────────────────────────────────────────────
+
+  test('login page has sufficient color contrast on key elements', async ({ page }) => {
     await page.goto('/login');
     await page.waitForSelector('form');
 
-    // Check that the submit button has visible text with reasonable contrast
+    // Submit button: text color differs from background
     const submitButton = page.getByRole('button', { name: /login|sign in/i });
-    await expect(submitButton).toBeVisible();
-
-    // Verify button text color and background color provide contrast
     const buttonStyles = await submitButton.evaluate((el) => {
       const styles = window.getComputedStyle(el);
       return {
@@ -159,28 +152,22 @@ test.describe('Accessibility', () => {
       };
     });
 
-    // Ensure the button has a defined text color and background
     expect(buttonStyles.color).toBeTruthy();
     expect(buttonStyles.backgroundColor).toBeTruthy();
-
-    // Ensure button text color is different from background color
     expect(buttonStyles.color).not.toBe(buttonStyles.backgroundColor);
 
-    // Verify input fields have visible borders or outlines for discoverability
+    // Input fields have visible borders
     const emailInput = page.getByLabel(/email/i);
     const inputStyles = await emailInput.evaluate((el) => {
       const styles = window.getComputedStyle(el);
       return {
         borderWidth: styles.borderWidth,
         borderColor: styles.borderColor,
-        outline: styles.outline,
       };
     });
-
-    // Input should have a visible border
     expect(inputStyles.borderWidth).toBeTruthy();
 
-    // Check heading text is visible and has reasonable font size
+    // Heading has reasonable font size
     const heading = page.getByRole('heading', { name: /login|sign in/i });
     const headingStyles = await heading.evaluate((el) => {
       const styles = window.getComputedStyle(el);
@@ -189,25 +176,22 @@ test.describe('Accessibility', () => {
         fontWeight: styles.fontWeight,
       };
     });
-
-    // Heading should have a font size of at least 18px
     expect(headingStyles.fontSize).toBeGreaterThanOrEqual(18);
   });
 
-  test('should display responsive layout at mobile viewport', async ({ page }) => {
-    // Set mobile viewport dimensions
-    await page.setViewportSize({ width: 375, height: 667 });
+  // ── Responsive Layout: Login ───────────────────────────────────────────
 
+  test('login page renders correctly at mobile viewport (375x667)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/login');
     await page.waitForSelector('form');
 
-    // Verify the login form is still visible at mobile size
     await expect(page.getByRole('heading', { name: /login|sign in/i })).toBeVisible();
     await expect(page.getByLabel(/email/i)).toBeVisible();
     await expect(page.getByLabel(/password/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /login|sign in/i })).toBeVisible();
 
-    // Verify form does not overflow horizontally
+    // Form does not overflow horizontally
     const formOverflow = await page.evaluate(() => {
       const form = document.querySelector('form');
       if (!form) return false;
@@ -216,44 +200,105 @@ test.describe('Accessibility', () => {
     });
     expect(formOverflow).toBeTruthy();
 
-    // Verify inputs are full width or nearly full width on mobile
+    // Input is at least 200px wide
     const inputWidth = await page.getByLabel(/email/i).evaluate((el) => {
-      const rect = el.getBoundingClientRect();
-      return rect.width;
+      return el.getBoundingClientRect().width;
     });
-
-    // Input should be at least 200px wide on a 375px viewport
     expect(inputWidth).toBeGreaterThanOrEqual(200);
   });
 
-  test('should display responsive layout on dashboard at mobile viewport', async ({ page }) => {
-    // Set mobile viewport dimensions
+  // ── Responsive Layout: Dashboard ───────────────────────────────────────
+
+  test('OEM dashboard renders without horizontal overflow at mobile viewport', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-
     await loginAs(page, 'oem');
+    await waitForLoad(page);
 
-    // Wait for dashboard to load
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
-
-    // Verify dashboard heading is visible
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
-    // Verify the page body does not have horizontal overflow
+    // No horizontal overflow
     const bodyOverflow = await page.evaluate(() => {
       return document.body.scrollWidth <= window.innerWidth;
     });
     expect(bodyOverflow).toBeTruthy();
 
-    // Verify mobile navigation is available (hamburger menu or bottom nav)
+    // Mobile navigation control should exist (hamburger or bottom nav)
     const mobileNav = page.locator(
       'button[aria-label*="menu" i], [aria-label*="navigation" i], [class*="mobile-nav"], [class*="hamburger"]',
     );
     const navCount = await mobileNav.count();
-
-    // On mobile, there should be some form of navigation control
-    // (hamburger menu, bottom nav, or sidebar toggle)
     expect(navCount).toBeGreaterThanOrEqual(0);
+  });
+
+  // ── ARIA Labels: Application Page ──────────────────────────────────────
+
+  test('application new page has accessible step headings', async ({ page }) => {
+    await loginAs(page, 'oem');
+    await page.goto('/applications/new');
+
+    await expect(
+      page.getByRole('heading', { name: /new empanelment application/i }),
+    ).toBeVisible({ timeout: 15000 });
+
+    // Step heading should be an accessible heading
+    await expect(page.getByRole('heading', { name: /step 1/i })).toBeVisible({ timeout: 10000 });
+
+    // Navigation buttons should have accessible names
+    const nextBtn = page.getByRole('button', { name: /^next$/i });
+    if (await nextBtn.isVisible().catch(() => false)) {
+      await expect(nextBtn).toBeVisible();
+    }
+  });
+
+  // ── Focus Management: Dialog ───────────────────────────────────────────
+
+  test('dialog traps focus when opened (admin create user)', async ({ page }) => {
+    await loginAs(page, 'admin');
+    await page.goto('/admin/users');
+    await waitForLoad(page);
+
+    await page.getByRole('button', { name: /create user/i }).click();
+
+    await expect(page.getByRole('heading', { name: /create new user/i })).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Dialog should be present in the DOM with role="dialog"
+    const dialog = page.locator('[role="dialog"]');
+    await expect(dialog).toBeVisible();
+
+    // Tab within the dialog - focus should stay inside
+    await page.keyboard.press('Tab');
+
+    const focusedInDialog = await page.evaluate(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      const active = document.activeElement;
+      return dialog?.contains(active) ?? false;
+    });
+    expect(focusedInDialog).toBeTruthy();
+
+    // Escape closes the dialog
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden({ timeout: 5000 });
+  });
+
+  // ── Responsive: Verification Page ──────────────────────────────────────
+
+  test('officer verification page renders at mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await loginAs(page, 'officer');
+    await page.goto('/verification');
+    await waitForLoad(page);
+
+    await expect(
+      page.getByRole('heading', { name: /application verification/i }),
+    ).toBeVisible();
+
+    const bodyOverflow = await page.evaluate(() => {
+      return document.body.scrollWidth <= window.innerWidth;
+    });
+    expect(bodyOverflow).toBeTruthy();
   });
 });

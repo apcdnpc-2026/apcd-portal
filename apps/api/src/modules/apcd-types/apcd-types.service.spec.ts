@@ -120,6 +120,14 @@ describe('ApcdTypesService', () => {
         }),
       );
     });
+
+    it('should call findMany exactly once', async () => {
+      prisma.aPCDType.findMany.mockResolvedValue([]);
+
+      await service.findAll();
+
+      expect(prisma.aPCDType.findMany).toHaveBeenCalledTimes(1);
+    });
   });
 
   // =========================================================================
@@ -158,6 +166,16 @@ describe('ApcdTypesService', () => {
         where: { category: 'BAG_FILTER', isActive: true },
         orderBy: { sortOrder: 'asc' },
       });
+    });
+
+    it('should return single item for category with one type', async () => {
+      const cycloneTypes = mockApcdTypes.filter((t) => t.category === 'CYCLONE');
+      prisma.aPCDType.findMany.mockResolvedValue(cycloneTypes as any);
+
+      const result = await service.findByCategory('CYCLONE' as any);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].subType).toBe('Multi-Cyclone');
     });
   });
 
@@ -220,6 +238,16 @@ describe('ApcdTypesService', () => {
       expect(Object.keys(result)).toEqual(['ESP']);
       expect(result['ESP']).toHaveLength(2);
     });
+
+    it('should not create empty category groups', async () => {
+      prisma.aPCDType.findMany.mockResolvedValue(mockApcdTypes as any);
+
+      const result = await service.findGroupedByCategory();
+
+      for (const key of Object.keys(result)) {
+        expect(result[key].length).toBeGreaterThan(0);
+      }
+    });
   });
 
   // =========================================================================
@@ -257,6 +285,17 @@ describe('ApcdTypesService', () => {
 
       expect(bagFilterCategory).toBeDefined();
       expect(bagFilterCategory.name).toBe('Bag Filter / Baghouse Systems');
+    });
+
+    it('should use known category display names for CYCLONE', async () => {
+      prisma.aPCDType.findMany.mockResolvedValue(mockApcdTypes as any);
+
+      const result = await service.findCategoriesWithTypes();
+      const cycloneCategory = result.find((c: any) => c.id === 'CYCLONE');
+
+      expect(cycloneCategory).toBeDefined();
+      expect(cycloneCategory.name).toBe('Cyclone Separators');
+      expect(cycloneCategory.description).toBe('Centrifugal separation of particulate matter');
     });
 
     it('should map type subType to name field', async () => {
@@ -309,6 +348,28 @@ describe('ApcdTypesService', () => {
 
       expect(espCategory.types).toHaveLength(2);
       expect(cycloneCategory.types).toHaveLength(1);
+    });
+
+    it('should set description to null for each type entry', async () => {
+      prisma.aPCDType.findMany.mockResolvedValue(mockApcdTypes as any);
+
+      const result = await service.findCategoriesWithTypes();
+
+      for (const category of result) {
+        for (const type of category.types) {
+          expect(type.description).toBeNull();
+        }
+      }
+    });
+
+    it('should preserve category order based on data order', async () => {
+      prisma.aPCDType.findMany.mockResolvedValue(mockApcdTypes as any);
+
+      const result = await service.findCategoriesWithTypes();
+
+      expect(result[0].id).toBe('ESP');
+      expect(result[1].id).toBe('BAG_FILTER');
+      expect(result[2].id).toBe('CYCLONE');
     });
   });
 });

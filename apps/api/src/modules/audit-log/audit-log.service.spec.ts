@@ -138,6 +138,27 @@ describe('AuditLogService', () => {
         },
       });
     });
+
+    it('should pass oldValues and newValues correctly', async () => {
+      const entry: AuditLogEntry = {
+        action: 'STATUS_CHANGE',
+        entityType: 'Application',
+        entityId: 'app-2',
+        oldValues: { status: 'SUBMITTED', assignedTo: null },
+        newValues: { status: 'UNDER_REVIEW', assignedTo: 'officer-1' },
+      };
+
+      prisma.auditLog.create.mockResolvedValue(mockAuditLog as any);
+
+      await service.log(entry);
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          oldValues: { status: 'SUBMITTED', assignedTo: null },
+          newValues: { status: 'UNDER_REVIEW', assignedTo: 'officer-1' },
+        }),
+      });
+    });
   });
 
   // =========================================================================
@@ -184,6 +205,19 @@ describe('AuditLogService', () => {
       expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ entityType: 'Application' }),
+        }),
+      );
+    });
+
+    it('should apply entityId filter', async () => {
+      prisma.auditLog.findMany.mockResolvedValue([]);
+      prisma.auditLog.count.mockResolvedValue(0);
+
+      await service.findAll({ entityId: 'app-1' });
+
+      expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ entityId: 'app-1' }),
         }),
       );
     });
@@ -238,6 +272,23 @@ describe('AuditLogService', () => {
       );
     });
 
+    it('should apply only endDate when startDate is not provided', async () => {
+      prisma.auditLog.findMany.mockResolvedValue([]);
+      prisma.auditLog.count.mockResolvedValue(0);
+
+      const endDate = new Date('2025-12-31');
+
+      await service.findAll({ endDate });
+
+      expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            createdAt: { lte: endDate },
+          }),
+        }),
+      );
+    });
+
     it('should apply custom pagination', async () => {
       prisma.auditLog.findMany.mockResolvedValue([]);
       prisma.auditLog.count.mockResolvedValue(100);
@@ -267,6 +318,16 @@ describe('AuditLogService', () => {
       expect(result.pagination.totalPages).toBe(6);
     });
 
+    it('should handle zero total results', async () => {
+      prisma.auditLog.findMany.mockResolvedValue([]);
+      prisma.auditLog.count.mockResolvedValue(0);
+
+      const result = await service.findAll({});
+
+      expect(result.pagination.totalPages).toBe(0);
+      expect(result.logs).toEqual([]);
+    });
+
     it('should include user relation in results', async () => {
       prisma.auditLog.findMany.mockResolvedValue([mockAuditLogWithUser] as any);
       prisma.auditLog.count.mockResolvedValue(1);
@@ -293,6 +354,51 @@ describe('AuditLogService', () => {
       expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           orderBy: { createdAt: 'desc' },
+        }),
+      );
+    });
+
+    it('should apply multiple filters simultaneously', async () => {
+      prisma.auditLog.findMany.mockResolvedValue([]);
+      prisma.auditLog.count.mockResolvedValue(0);
+
+      await service.findAll({
+        userId: 'user-1',
+        entityType: 'Application',
+        action: 'SUBMIT',
+      });
+
+      expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'user-1',
+            entityType: 'Application',
+            action: { contains: 'SUBMIT' },
+          }),
+        }),
+      );
+    });
+
+    it('should not include createdAt filter when no dates provided', async () => {
+      prisma.auditLog.findMany.mockResolvedValue([]);
+      prisma.auditLog.count.mockResolvedValue(0);
+
+      await service.findAll({ userId: 'user-1' });
+
+      const callArgs = prisma.auditLog.findMany.mock.calls[0][0] as any;
+      expect(callArgs.where.createdAt).toBeUndefined();
+    });
+
+    it('should use page 1 skip 0 by default', async () => {
+      prisma.auditLog.findMany.mockResolvedValue([]);
+      prisma.auditLog.count.mockResolvedValue(0);
+
+      await service.findAll({});
+
+      expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skip: 0,
+          take: 50,
         }),
       );
     });
@@ -326,6 +432,19 @@ describe('AuditLogService', () => {
       const result = await service.findByEntity('Certificate', 'cert-nonexistent');
 
       expect(result).toEqual([]);
+    });
+
+    it('should return multiple logs for same entity', async () => {
+      const logs = [
+        { ...mockAuditLogWithUser, id: 'log-1', action: 'CREATED' },
+        { ...mockAuditLogWithUser, id: 'log-2', action: 'UPDATED' },
+        { ...mockAuditLogWithUser, id: 'log-3', action: 'SUBMITTED' },
+      ];
+      prisma.auditLog.findMany.mockResolvedValue(logs as any);
+
+      const result = await service.findByEntity('Application', 'app-1');
+
+      expect(result).toHaveLength(3);
     });
   });
 
@@ -366,6 +485,18 @@ describe('AuditLogService', () => {
 
       expect(result).toEqual([]);
     });
+
+    it('should order by createdAt descending', async () => {
+      prisma.auditLog.findMany.mockResolvedValue([]);
+
+      await service.findByUser('user-1');
+
+      expect(prisma.auditLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+    });
   });
 
   // =========================================================================
@@ -375,12 +506,12 @@ describe('AuditLogService', () => {
   describe('getRecentActivitySummary', () => {
     it('should return summary of last 24 hours activity', async () => {
       prisma.auditLog.count.mockResolvedValue(42);
-      prisma.auditLog.groupBy.mockResolvedValueOnce([
+      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([
         { userId: 'user-1' },
         { userId: 'user-2' },
         { userId: 'user-3' },
       ] as any);
-      prisma.auditLog.groupBy.mockResolvedValueOnce([
+      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([
         { action: 'APPLICATION_SUBMITTED', _count: 15 },
         { action: 'USER_LOGIN', _count: 10 },
       ] as any);
@@ -401,8 +532,8 @@ describe('AuditLogService', () => {
 
     it('should return zero counts when no recent activity', async () => {
       prisma.auditLog.count.mockResolvedValue(0);
-      prisma.auditLog.groupBy.mockResolvedValueOnce([]);
-      prisma.auditLog.groupBy.mockResolvedValueOnce([]);
+      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([] as any);
+      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([] as any);
 
       const result = await service.getRecentActivitySummary();
 
@@ -417,13 +548,44 @@ describe('AuditLogService', () => {
 
     it('should use date filter for last 24 hours', async () => {
       prisma.auditLog.count.mockResolvedValue(0);
-      prisma.auditLog.groupBy.mockResolvedValue([] as any);
+      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValue([] as any);
 
       await service.getRecentActivitySummary();
 
       expect(prisma.auditLog.count).toHaveBeenCalledWith({
         where: { createdAt: { gte: expect.any(Date) } },
       });
+    });
+
+    it('should handle single user with single action', async () => {
+      prisma.auditLog.count.mockResolvedValue(1);
+      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([
+        { userId: 'user-1' },
+      ] as any);
+      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([
+        { action: 'LOGIN', _count: 1 },
+      ] as any);
+
+      const result = await service.getRecentActivitySummary();
+
+      expect(result.last24Hours.uniqueUsers).toBe(1);
+      expect(result.last24Hours.topActions).toHaveLength(1);
+    });
+
+    it('should calculate unique users from groupBy length', async () => {
+      prisma.auditLog.count.mockResolvedValue(100);
+      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([
+        { userId: 'u1' },
+        { userId: 'u2' },
+        { userId: 'u3' },
+        { userId: 'u4' },
+        { userId: 'u5' },
+      ] as any);
+      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([] as any);
+
+      const result = await service.getRecentActivitySummary();
+
+      expect(result.last24Hours.uniqueUsers).toBe(5);
     });
   });
 });

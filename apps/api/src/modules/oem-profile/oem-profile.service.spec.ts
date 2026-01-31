@@ -111,6 +111,20 @@ describe('OemProfileService', () => {
         where: { userId: 'specific-user-id' },
       });
     });
+
+    it('should return profile with all fields intact', async () => {
+      prisma.oemProfile.findUnique.mockResolvedValue(mockOemProfile as any);
+
+      const result = await service.getByUserId('user-1');
+
+      expect(result.id).toBe('profile-1');
+      expect(result.companyName).toBe('Test Pollution Control Pvt. Ltd.');
+      expect(result.firmType).toBe('PRIVATE_LIMITED');
+      expect(result.firmSize).toBe('MEDIUM');
+      expect(result.isMSE).toBe(false);
+      expect(result.isStartup).toBe(false);
+      expect(result.isLocalSupplier).toBe(false);
+    });
   });
 
   // =========================================================================
@@ -185,6 +199,112 @@ describe('OemProfileService', () => {
         },
       });
     });
+
+    it.each([
+      'PROPRIETARY',
+      'PRIVATE_LIMITED',
+      'LIMITED_COMPANY',
+      'PUBLIC_SECTOR',
+      'SOCIETY',
+    ])('should accept firmType %s', async (firmType) => {
+      const dto = { ...mockCreateDto, firmType: firmType as any };
+
+      prisma.oemProfile.findUnique.mockResolvedValue(null);
+      prisma.oemProfile.create.mockResolvedValue({ ...mockOemProfile, firmType } as any);
+
+      const result = await service.create('user-1', dto);
+
+      expect(prisma.oemProfile.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ firmType }),
+      });
+      expect(result.firmType).toBe(firmType);
+    });
+
+    it.each([
+      'COTTAGE',
+      'MICRO',
+      'SMALL',
+      'MEDIUM',
+      'LARGE',
+    ])('should accept firmSize %s', async (firmSize) => {
+      const dto = { ...mockCreateDto, firmSize: firmSize as any };
+
+      prisma.oemProfile.findUnique.mockResolvedValue(null);
+      prisma.oemProfile.create.mockResolvedValue({ ...mockOemProfile, firmSize } as any);
+
+      const result = await service.create('user-1', dto);
+
+      expect(prisma.oemProfile.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ firmSize }),
+      });
+      expect(result.firmSize).toBe(firmSize);
+    });
+
+    it('should pass empty string firmType through to Prisma without validation', async () => {
+      // Note: The service does NOT validate firmType values; it delegates to Prisma.
+      // An empty string would be passed to the database, which may reject it at the
+      // schema level. The service layer itself does not guard against this.
+      const dto = { ...mockCreateDto, firmType: '' as any };
+
+      prisma.oemProfile.findUnique.mockResolvedValue(null);
+      prisma.oemProfile.create.mockResolvedValue({ ...mockOemProfile, firmType: '' } as any);
+
+      const result = await service.create('user-1', dto);
+
+      expect(prisma.oemProfile.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ firmType: '' }),
+      });
+      expect(result.firmType).toBe('');
+    });
+
+    it('should create profile with MSE and startup flags set', async () => {
+      const dto = {
+        ...mockCreateDto,
+        isMSE: true,
+        isStartup: true,
+        isLocalSupplier: false,
+        udyamRegistrationNo: 'UDYAM-HR-01-0012345',
+        dpiitRecognitionNo: 'DPIIT12345',
+      };
+
+      prisma.oemProfile.findUnique.mockResolvedValue(null);
+      prisma.oemProfile.create.mockResolvedValue({ ...mockOemProfile, ...dto } as any);
+
+      const result = await service.create('user-1', dto);
+
+      expect(prisma.oemProfile.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-1',
+          ...dto,
+        },
+      });
+      expect(result.isMSE).toBe(true);
+      expect(result.isStartup).toBe(true);
+    });
+
+    it('should create profile with GPS coordinates and local content', async () => {
+      const dto = {
+        ...mockCreateDto,
+        gpsLatitude: 28.4595,
+        gpsLongitude: 77.0266,
+        isLocalSupplier: true,
+        localContentPercent: 85,
+      };
+
+      prisma.oemProfile.findUnique.mockResolvedValue(null);
+      prisma.oemProfile.create.mockResolvedValue({ ...mockOemProfile, ...dto } as any);
+
+      await service.create('user-1', dto);
+
+      expect(prisma.oemProfile.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          gpsLatitude: 28.4595,
+          gpsLongitude: 77.0266,
+          isLocalSupplier: true,
+          localContentPercent: 85,
+        }),
+      });
+    });
   });
 
   // =========================================================================
@@ -253,6 +373,54 @@ describe('OemProfileService', () => {
       expect(result.isMSE).toBe(true);
       expect(result.isStartup).toBe(true);
     });
+
+    it('should update firmType to a different valid value', async () => {
+      const updateDto = { firmType: 'PROPRIETARY' as any };
+
+      prisma.oemProfile.findUnique.mockResolvedValue(mockOemProfile as any);
+      prisma.oemProfile.update.mockResolvedValue({ ...mockOemProfile, ...updateDto } as any);
+
+      const result = await service.update('user-1', updateDto);
+
+      expect(result.firmType).toBe('PROPRIETARY');
+      expect(prisma.oemProfile.update).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        data: { firmType: 'PROPRIETARY' },
+      });
+    });
+
+    it('should update firmSize from MEDIUM to COTTAGE', async () => {
+      const updateDto = { firmSize: 'COTTAGE' as any };
+
+      prisma.oemProfile.findUnique.mockResolvedValue(mockOemProfile as any);
+      prisma.oemProfile.update.mockResolvedValue({ ...mockOemProfile, ...updateDto } as any);
+
+      const result = await service.update('user-1', updateDto);
+
+      expect(result.firmSize).toBe('COTTAGE');
+    });
+
+    it('should update multiple fields at once', async () => {
+      const updateDto = {
+        companyName: 'New Name',
+        fullAddress: '456, New Address',
+        state: 'Delhi',
+        isMSE: true,
+        firmSize: 'SMALL' as any,
+        employeeCount: 10,
+      };
+
+      prisma.oemProfile.findUnique.mockResolvedValue(mockOemProfile as any);
+      prisma.oemProfile.update.mockResolvedValue({ ...mockOemProfile, ...updateDto } as any);
+
+      const result = await service.update('user-1', updateDto);
+
+      expect(result.companyName).toBe('New Name');
+      expect(result.state).toBe('Delhi');
+      expect(result.isMSE).toBe(true);
+      expect(result.firmSize).toBe('SMALL');
+      expect(result.employeeCount).toBe(10);
+    });
   });
 
   // =========================================================================
@@ -299,10 +467,49 @@ describe('OemProfileService', () => {
       expect(result).toBe(true);
     });
 
-    it('should return true when multiple eligibility flags are set', async () => {
+    it('should return true when all three eligibility flags are set', async () => {
       prisma.oemProfile.findUnique.mockResolvedValue({
         ...mockOemProfile,
         isMSE: true,
+        isStartup: true,
+        isLocalSupplier: true,
+      } as any);
+
+      const result = await service.isDiscountEligible('user-1');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return true when isMSE and isStartup are set', async () => {
+      prisma.oemProfile.findUnique.mockResolvedValue({
+        ...mockOemProfile,
+        isMSE: true,
+        isStartup: true,
+        isLocalSupplier: false,
+      } as any);
+
+      const result = await service.isDiscountEligible('user-1');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return true when isMSE and isLocalSupplier are set', async () => {
+      prisma.oemProfile.findUnique.mockResolvedValue({
+        ...mockOemProfile,
+        isMSE: true,
+        isStartup: false,
+        isLocalSupplier: true,
+      } as any);
+
+      const result = await service.isDiscountEligible('user-1');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return true when isStartup and isLocalSupplier are set', async () => {
+      prisma.oemProfile.findUnique.mockResolvedValue({
+        ...mockOemProfile,
+        isMSE: false,
         isStartup: true,
         isLocalSupplier: true,
       } as any);
@@ -341,6 +548,15 @@ describe('OemProfileService', () => {
       expect(prisma.oemProfile.findUnique).toHaveBeenCalledWith({
         where: { userId: 'specific-user' },
       });
+    });
+
+    it('should not throw when profile is missing -- returns false gracefully', async () => {
+      prisma.oemProfile.findUnique.mockResolvedValue(null);
+
+      const result = await service.isDiscountEligible('user-no-profile');
+
+      expect(result).toBe(false);
+      expect(prisma.oemProfile.findUnique).toHaveBeenCalledTimes(1);
     });
   });
 });

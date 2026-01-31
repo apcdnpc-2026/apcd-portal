@@ -39,6 +39,12 @@ const mockNotification = {
   createdAt: new Date('2025-06-15T10:00:00Z'),
 };
 
+const mockReadNotification = {
+  ...mockNotification,
+  id: 'notif-2',
+  isRead: true,
+};
+
 const mockApplication = {
   id: 'app-1',
   applicationNumber: 'APCD-2025-0001',
@@ -79,7 +85,7 @@ describe('NotificationsService', () => {
   });
 
   // =========================================================================
-  // send()
+  // send() -- createNotification
   // =========================================================================
 
   describe('send', () => {
@@ -155,6 +161,60 @@ describe('NotificationsService', () => {
       });
 
       expect(result).toEqual(mockNotification);
+    });
+
+    it('should create notification without applicationId when not provided', async () => {
+      prisma.user.findUnique.mockResolvedValue(mockUser as any);
+      prisma.notification.create.mockResolvedValue({
+        ...mockNotification,
+        applicationId: undefined,
+      } as any);
+
+      await service.send({
+        userId: 'user-1',
+        type: NotificationType.GENERAL,
+        title: 'General Notice',
+        message: 'A general notification.',
+      });
+
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-1',
+          applicationId: undefined,
+          type: NotificationType.GENERAL,
+          title: 'General Notice',
+          message: 'A general notification.',
+        },
+      });
+    });
+
+    it.each([
+      NotificationType.APPLICATION_SUBMITTED,
+      NotificationType.APPLICATION_QUERIED,
+      NotificationType.QUERY_RESPONDED,
+      NotificationType.APPLICATION_APPROVED,
+      NotificationType.APPLICATION_REJECTED,
+      NotificationType.PAYMENT_RECEIVED,
+      NotificationType.PAYMENT_VERIFIED,
+      NotificationType.FIELD_VISIT_SCHEDULED,
+      NotificationType.CERTIFICATE_ISSUED,
+      NotificationType.RENEWAL_REMINDER,
+      NotificationType.GENERAL,
+    ])('should accept NotificationType %s', async (type) => {
+      prisma.user.findUnique.mockResolvedValue(mockUser as any);
+      prisma.notification.create.mockResolvedValue({ ...mockNotification, type } as any);
+
+      const result = await service.send({
+        userId: 'user-1',
+        type,
+        title: `Title for ${type}`,
+        message: `Message for ${type}`,
+      });
+
+      expect(result).toBeDefined();
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ type }),
+      });
     });
   });
 
@@ -250,6 +310,18 @@ describe('NotificationsService', () => {
         }),
       });
     });
+
+    it('should query application with applicant and oemProfile includes', async () => {
+      await service.notifyApplicationStatusChange('app-1', 'SUBMITTED');
+
+      expect(prisma.application.findUnique).toHaveBeenCalledWith({
+        where: { id: 'app-1' },
+        include: {
+          applicant: true,
+          oemProfile: true,
+        },
+      });
+    });
   });
 
   // =========================================================================
@@ -301,6 +373,44 @@ describe('NotificationsService', () => {
 
       expect(result).toEqual([]);
     });
+
+    it('should return both read and unread when unreadOnly is not passed', async () => {
+      const notifications = [mockNotification, mockReadNotification];
+      prisma.notification.findMany.mockResolvedValue(notifications as any);
+
+      const result = await service.getNotificationsForUser('user-1');
+
+      expect(result).toHaveLength(2);
+      expect(prisma.notification.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+    });
+
+    it('should order by createdAt descending', async () => {
+      prisma.notification.findMany.mockResolvedValue([]);
+
+      await service.getNotificationsForUser('user-1');
+
+      expect(prisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+    });
+
+    it('should limit results to 50', async () => {
+      prisma.notification.findMany.mockResolvedValue([]);
+
+      await service.getNotificationsForUser('user-1');
+
+      expect(prisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          take: 50,
+        }),
+      );
+    });
   });
 
   // =========================================================================
@@ -320,12 +430,38 @@ describe('NotificationsService', () => {
       });
     });
 
-    it('should return count 0 when notification does not belong to user', async () => {
+    it('should return count 0 when notification does not exist', async () => {
+      prisma.notification.updateMany.mockResolvedValue({ count: 0 } as any);
+
+      const result = await service.markAsRead('nonexistent-notif', 'user-1');
+
+      expect(result).toEqual({ count: 0 });
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+        where: { id: 'nonexistent-notif', userId: 'user-1' },
+        data: { isRead: true },
+      });
+    });
+
+    it('should return count 0 when wrong user tries to mark another user notification', async () => {
       prisma.notification.updateMany.mockResolvedValue({ count: 0 } as any);
 
       const result = await service.markAsRead('notif-1', 'other-user');
 
       expect(result).toEqual({ count: 0 });
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+        where: { id: 'notif-1', userId: 'other-user' },
+        data: { isRead: true },
+      });
+    });
+
+    it('should use updateMany with both id and userId for ownership check', async () => {
+      prisma.notification.updateMany.mockResolvedValue({ count: 1 } as any);
+
+      await service.markAsRead('notif-1', 'user-1');
+
+      const call = prisma.notification.updateMany.mock.calls[0][0];
+      expect(call).toHaveProperty('where.id', 'notif-1');
+      expect(call).toHaveProperty('where.userId', 'user-1');
     });
   });
 
@@ -353,6 +489,29 @@ describe('NotificationsService', () => {
 
       expect(result).toEqual({ count: 0 });
     });
+
+    it('should only target unread notifications (isRead: false)', async () => {
+      prisma.notification.updateMany.mockResolvedValue({ count: 3 } as any);
+
+      await service.markAllAsRead('user-1');
+
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', isRead: false },
+        data: { isRead: true },
+      });
+    });
+
+    it('should scope to the specific user only', async () => {
+      prisma.notification.updateMany.mockResolvedValue({ count: 2 } as any);
+
+      await service.markAllAsRead('user-specific');
+
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: 'user-specific' }),
+        }),
+      );
+    });
   });
 
   // =========================================================================
@@ -377,6 +536,165 @@ describe('NotificationsService', () => {
       const result = await service.getUnreadCount('user-1');
 
       expect(result).toBe(0);
+    });
+
+    it('should return a number type', async () => {
+      prisma.notification.count.mockResolvedValue(12);
+
+      const result = await service.getUnreadCount('user-1');
+
+      expect(typeof result).toBe('number');
+    });
+
+    it('should filter by userId and isRead false', async () => {
+      prisma.notification.count.mockResolvedValue(0);
+
+      await service.getUnreadCount('another-user');
+
+      expect(prisma.notification.count).toHaveBeenCalledWith({
+        where: { userId: 'another-user', isRead: false },
+      });
+    });
+  });
+
+  // =========================================================================
+  // sendExpiryReminders()
+  // =========================================================================
+
+  describe('sendExpiryReminders', () => {
+    it('should send reminders for expiring certificates and return count', async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 30);
+
+      const expiringCerts = [
+        {
+          id: 'cert-1',
+          certificateNumber: 'NPC/APCD/2025/00001',
+          applicationId: 'app-1',
+          validUntil: futureDate,
+          status: 'ACTIVE',
+          application: {
+            applicantId: 'user-1',
+            applicant: mockUser,
+          },
+        },
+        {
+          id: 'cert-2',
+          certificateNumber: 'NPC/APCD/2025/00002',
+          applicationId: 'app-2',
+          validUntil: futureDate,
+          status: 'ACTIVE',
+          application: {
+            applicantId: 'user-1',
+            applicant: mockUser,
+          },
+        },
+      ];
+
+      prisma.certificate.findMany.mockResolvedValue(expiringCerts as any);
+      prisma.user.findUnique.mockResolvedValue(mockUser as any);
+      prisma.notification.create.mockResolvedValue(mockNotification as any);
+
+      const result = await service.sendExpiryReminders();
+
+      expect(result).toBe(2);
+      expect(prisma.certificate.findMany).toHaveBeenCalledWith({
+        where: {
+          status: 'ACTIVE',
+          validUntil: { lte: expect.any(Date) },
+        },
+        include: {
+          application: {
+            include: { applicant: true },
+          },
+        },
+      });
+    });
+
+    it('should return 0 when no certificates are expiring', async () => {
+      prisma.certificate.findMany.mockResolvedValue([]);
+
+      const result = await service.sendExpiryReminders();
+
+      expect(result).toBe(0);
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('should send RENEWAL_REMINDER notification type', async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 15);
+
+      const expiringCert = {
+        id: 'cert-1',
+        certificateNumber: 'NPC/APCD/2025/00001',
+        applicationId: 'app-1',
+        validUntil: futureDate,
+        status: 'ACTIVE',
+        application: {
+          applicantId: 'user-1',
+          applicant: mockUser,
+        },
+      };
+
+      prisma.certificate.findMany.mockResolvedValue([expiringCert] as any);
+      prisma.user.findUnique.mockResolvedValue(mockUser as any);
+      prisma.notification.create.mockResolvedValue(mockNotification as any);
+
+      await service.sendExpiryReminders();
+
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: NotificationType.RENEWAL_REMINDER,
+          title: 'Certificate Expiring Soon',
+          message: expect.stringContaining('NPC/APCD/2025/00001'),
+        }),
+      });
+    });
+
+    it('should include days until expiry in the message', async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 45);
+
+      const expiringCert = {
+        id: 'cert-1',
+        certificateNumber: 'NPC/APCD/2025/00001',
+        applicationId: 'app-1',
+        validUntil: futureDate,
+        status: 'ACTIVE',
+        application: {
+          applicantId: 'user-1',
+          applicant: mockUser,
+        },
+      };
+
+      prisma.certificate.findMany.mockResolvedValue([expiringCert] as any);
+      prisma.user.findUnique.mockResolvedValue(mockUser as any);
+      prisma.notification.create.mockResolvedValue(mockNotification as any);
+
+      await service.sendExpiryReminders();
+
+      expect(prisma.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          message: expect.stringMatching(/will expire in \d+ days/),
+        }),
+      });
+    });
+
+    it('should look for certificates expiring within 60 days', async () => {
+      prisma.certificate.findMany.mockResolvedValue([]);
+
+      await service.sendExpiryReminders();
+
+      const call = prisma.certificate.findMany.mock.calls[0][0] as any;
+      const cutoffDate = call.where.validUntil.lte as Date;
+      const now = new Date();
+      const diffDays = Math.round(
+        (cutoffDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      // Should be approximately 60 days from now
+      expect(diffDays).toBeGreaterThanOrEqual(59);
+      expect(diffDays).toBeLessThanOrEqual(61);
     });
   });
 });

@@ -92,6 +92,17 @@ describe('StaffDetailsService', () => {
 
       expect(result).toEqual([]);
     });
+
+    it('should pass applicationId correctly to prisma query', async () => {
+      prisma.staffDetail.findMany.mockResolvedValue([]);
+
+      await service.findByApplication('custom-app-id');
+
+      expect(prisma.staffDetail.findMany).toHaveBeenCalledWith({
+        where: { applicationId: 'custom-app-id' },
+        orderBy: { sortOrder: 'asc' },
+      });
+    });
   });
 
   // =========================================================================
@@ -117,6 +128,23 @@ describe('StaffDetailsService', () => {
         }),
       });
       expect(result.sortOrder).toBe(3);
+    });
+
+    it('should set sortOrder to 1 for first staff detail', async () => {
+      prisma.application.findUnique.mockResolvedValue(mockApplication as any);
+      prisma.staffDetail.count.mockResolvedValue(0);
+      prisma.staffDetail.create.mockResolvedValue({
+        ...mockStaffDetail,
+        sortOrder: 1,
+      } as any);
+
+      await service.create('app-1', 'user-1', mockStaffDto);
+
+      expect(prisma.staffDetail.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          sortOrder: 1,
+        }),
+      });
     });
 
     it('should throw NotFoundException when application does not exist', async () => {
@@ -148,6 +176,25 @@ describe('StaffDetailsService', () => {
       expect(prisma.staffDetail.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           isFieldVisitCoordinator: false,
+        }),
+      });
+    });
+
+    it('should pass all DTO fields to create', async () => {
+      prisma.application.findUnique.mockResolvedValue(mockApplication as any);
+      prisma.staffDetail.count.mockResolvedValue(0);
+      prisma.staffDetail.create.mockResolvedValue(mockStaffDetail as any);
+
+      await service.create('app-1', 'user-1', mockStaffDto);
+
+      expect(prisma.staffDetail.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: 'John Doe',
+          designation: 'Engineer',
+          qualification: 'B.Tech',
+          experienceYears: 5,
+          employeeId: 'EMP-001',
+          mobileNo: '9999999999',
         }),
       });
     });
@@ -190,6 +237,28 @@ describe('StaffDetailsService', () => {
       } as any);
 
       await expect(service.update('staff-1', 'user-1', {})).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should update multiple fields at once', async () => {
+      prisma.staffDetail.findUnique.mockResolvedValue({
+        ...mockStaffDetail,
+        application: mockApplication,
+      } as any);
+      prisma.staffDetail.update.mockResolvedValue({
+        ...mockStaffDetail,
+        name: 'Updated Name',
+        designation: 'Senior Engineer',
+      } as any);
+
+      await service.update('staff-1', 'user-1', {
+        name: 'Updated Name',
+        designation: 'Senior Engineer',
+      });
+
+      expect(prisma.staffDetail.update).toHaveBeenCalledWith({
+        where: { id: 'staff-1' },
+        data: { name: 'Updated Name', designation: 'Senior Engineer' },
+      });
     });
   });
 
@@ -264,6 +333,81 @@ describe('StaffDetailsService', () => {
         ForbiddenException,
       );
     });
+
+    it('should handle empty staff list', async () => {
+      prisma.application.findUnique.mockResolvedValue(mockApplication as any);
+      prisma.staffDetail.deleteMany.mockResolvedValue({ count: 0 } as any);
+      prisma.staffDetail.createMany.mockResolvedValue({ count: 0 } as any);
+
+      await service.bulkCreate('app-1', 'user-1', []);
+
+      expect(prisma.staffDetail.deleteMany).toHaveBeenCalled();
+      expect(prisma.staffDetail.createMany).toHaveBeenCalledWith({ data: [] });
+    });
+
+    it('should default isFieldVisitCoordinator to false in bulk items', async () => {
+      prisma.application.findUnique.mockResolvedValue(mockApplication as any);
+      prisma.staffDetail.deleteMany.mockResolvedValue({ count: 0 } as any);
+      prisma.staffDetail.createMany.mockResolvedValue({ count: 1 } as any);
+
+      const dtoWithout = {
+        name: 'Test',
+        designation: 'Engineer',
+        qualification: 'B.Tech',
+        experienceYears: 3,
+      };
+
+      await service.bulkCreate('app-1', 'user-1', [dtoWithout]);
+
+      expect(prisma.staffDetail.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            isFieldVisitCoordinator: false,
+            sortOrder: 1,
+          }),
+        ],
+      });
+    });
+
+    it('should assign sequential sortOrder starting from 1', async () => {
+      prisma.application.findUnique.mockResolvedValue(mockApplication as any);
+      prisma.staffDetail.deleteMany.mockResolvedValue({ count: 0 } as any);
+      prisma.staffDetail.createMany.mockResolvedValue({ count: 3 } as any);
+
+      const staffList = [
+        { ...mockStaffDto, name: 'A' },
+        { ...mockStaffDto, name: 'B' },
+        { ...mockStaffDto, name: 'C' },
+      ];
+
+      await service.bulkCreate('app-1', 'user-1', staffList);
+
+      expect(prisma.staffDetail.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({ name: 'A', sortOrder: 1 }),
+          expect.objectContaining({ name: 'B', sortOrder: 2 }),
+          expect.objectContaining({ name: 'C', sortOrder: 3 }),
+        ]),
+      });
+    });
+
+    it('should handle large bulk create (20 staff members)', async () => {
+      prisma.application.findUnique.mockResolvedValue(mockApplication as any);
+      prisma.staffDetail.deleteMany.mockResolvedValue({ count: 0 } as any);
+      prisma.staffDetail.createMany.mockResolvedValue({ count: 20 } as any);
+
+      const staffList = Array.from({ length: 20 }, (_, i) => ({
+        ...mockStaffDto,
+        name: `Staff ${i + 1}`,
+      }));
+
+      await service.bulkCreate('app-1', 'user-1', staffList);
+
+      const callArgs = prisma.staffDetail.createMany.mock.calls[0][0] as any;
+      expect(callArgs.data).toHaveLength(20);
+      expect(callArgs.data[0].sortOrder).toBe(1);
+      expect(callArgs.data[19].sortOrder).toBe(20);
+    });
   });
 
   // =========================================================================
@@ -297,6 +441,45 @@ describe('StaffDetailsService', () => {
       await expect(service.reorder('app-1', 'other-user', [])).rejects.toThrow(
         ForbiddenException,
       );
+    });
+
+    it('should call update with sortOrder for each id', async () => {
+      prisma.application.findUnique.mockResolvedValue(mockApplication as any);
+      prisma.staffDetail.update.mockResolvedValue(mockStaffDetail as any);
+      prisma.staffDetail.findMany.mockResolvedValue([]);
+
+      await service.reorder('app-1', 'user-1', ['id-a', 'id-b', 'id-c']);
+
+      // $transaction was called with an array of promises
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      // staffDetail.update should have been called 3 times
+      expect(prisma.staffDetail.update).toHaveBeenCalledTimes(3);
+      expect(prisma.staffDetail.update).toHaveBeenCalledWith({
+        where: { id: 'id-a' },
+        data: { sortOrder: 1 },
+      });
+      expect(prisma.staffDetail.update).toHaveBeenCalledWith({
+        where: { id: 'id-b' },
+        data: { sortOrder: 2 },
+      });
+      expect(prisma.staffDetail.update).toHaveBeenCalledWith({
+        where: { id: 'id-c' },
+        data: { sortOrder: 3 },
+      });
+    });
+
+    it('should return updated list from findByApplication after reorder', async () => {
+      prisma.application.findUnique.mockResolvedValue(mockApplication as any);
+      prisma.staffDetail.update.mockResolvedValue(mockStaffDetail as any);
+      const reorderedList = [
+        { ...mockStaffDetail, id: 'staff-2', sortOrder: 1 },
+        { ...mockStaffDetail, id: 'staff-1', sortOrder: 2 },
+      ];
+      prisma.staffDetail.findMany.mockResolvedValue(reorderedList as any);
+
+      const result = await service.reorder('app-1', 'user-1', ['staff-2', 'staff-1']);
+
+      expect(result).toEqual(reorderedList);
     });
   });
 });

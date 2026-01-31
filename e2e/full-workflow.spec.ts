@@ -1,41 +1,38 @@
 import { test, expect } from '@playwright/test';
 
-import { loginAs } from './helpers/auth';
+import { loginAs, waitForLoad } from './helpers/auth';
 
 /**
  * Full Cross-Role End-to-End Workflow
  *
- * Simulates the complete application lifecycle across all user roles:
- *   1. OEM registers, completes profile, creates and submits application
- *   2. Officer views pending, raises a query
- *   3. OEM responds to the query
- *   4. Officer resolves the query, forwards to committee
- *   5. Committee evaluates with scores, recommends approval
- *   6. Officer finalizes approval
- *   7. Verify application status is APPROVED
+ * Complete application lifecycle:
+ *   Phase 1: OEM creates profile, creates application, navigates steps, submits
+ *   Phase 2: Officer views pending, opens app, raises query (with empty documentType)
+ *   Phase 3: OEM views /queries, responds to query
+ *   Phase 4: Officer resolves query, forwards to committee
+ *   Phase 5: Committee evaluates with scores, submits Approve recommendation
+ *   Phase 6: Certificate generation verification (officer checks status)
+ *   Phase 7: OEM verifies final application status
  *
- * This test uses serial execution since each step depends on the previous one.
+ * Serial execution: each phase depends on the previous one.
  */
 
 test.describe.serial('Full Application Workflow (Cross-Role)', () => {
-  // ─── Phase 1: OEM creates and submits application ─────────────────────
+  // ── Phase 1: OEM creates and submits ───────────────────────────────────
 
-  test('Phase 1: OEM logs in, creates application, and submits it', async ({ page }) => {
-    // Login as OEM
+  test('Phase 1: OEM creates profile, application, and submits', async ({ page }) => {
     await loginAs(page, 'oem');
 
-    // Ensure profile exists - navigate to profile page
+    // Ensure profile exists
     await page.goto('/profile');
     await page.waitForSelector('form', { timeout: 15000 });
 
-    // Check if profile already exists (Update Profile vs Save Profile button)
     const hasProfile = await page
       .getByRole('button', { name: /update profile/i })
       .isVisible()
       .catch(() => false);
 
     if (!hasProfile) {
-      // Fill required profile fields
       await page.getByLabel(/company name/i).fill('Full Workflow OEM Ltd');
 
       const firmTypeTrigger = page.locator('button:has-text("Select firm type")');
@@ -52,25 +49,17 @@ test.describe.serial('Full Application Workflow (Cross-Role)', () => {
       await page.getByLabel(/PIN Code/i).fill('122002');
 
       await page.getByRole('button', { name: /save profile/i }).click();
-      await expect(page.getByText(/profile created/i)).toBeVisible({
-        timeout: 10000,
-      });
+      await expect(page.getByText(/profile created/i)).toBeVisible({ timeout: 10000 });
     }
 
-    // Navigate to create new application
+    // Create new application
     await page.goto('/applications/new');
-    await expect(page.getByRole('heading', { name: /new empanelment application/i })).toBeVisible({
-      timeout: 15000,
-    });
+    await expect(
+      page.getByRole('heading', { name: /new empanelment application/i }),
+    ).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: /step 1/i })).toBeVisible({ timeout: 15000 });
 
-    // Wait for application to be created (auto-created on page load)
-    await expect(page.getByRole('heading', { name: /step 1/i })).toBeVisible({
-      timeout: 15000,
-    });
-
-    // Application ID may be stored in page state; we will capture it from navigation
-
-    // Step 1: Select APCD types (click first available card if any)
+    // Select first APCD type
     const apcdCards = page.locator('[class*="cursor-pointer"]').filter({
       has: page.locator('.font-medium'),
     });
@@ -78,88 +67,53 @@ test.describe.serial('Full Application Workflow (Cross-Role)', () => {
       await apcdCards.first().click();
     }
 
-    // Navigate through all steps to reach Review
-    // Use Save & Continue or Skip for now or Next
-    const skipOrContinue = async () => {
+    // Navigate through all steps
+    const advanceStep = async () => {
       const saveBtn = page.getByRole('button', { name: /save & continue/i });
       const skipBtn = page.getByRole('button', { name: /skip for now/i });
-      if (await saveBtn.isVisible()) {
+      const nextBtn = page.getByRole('button', { name: /^next$/i });
+      if (await saveBtn.isVisible().catch(() => false)) {
         await saveBtn.click();
-      } else if (await skipBtn.isVisible()) {
+      } else if (await skipBtn.isVisible().catch(() => false)) {
         await skipBtn.click();
       } else {
-        await page.getByRole('button', { name: /^next$/i }).click();
+        await nextBtn.click();
       }
     };
 
-    // Step 1 -> Step 2
-    await skipOrContinue();
-    await expect(page.getByRole('heading', { name: /step 2/i })).toBeVisible({
-      timeout: 5000,
-    });
+    for (let step = 1; step <= 5; step++) {
+      await advanceStep();
+      await expect(
+        page.getByRole('heading', { name: new RegExp(`step ${step + 1}`, 'i') }),
+      ).toBeVisible({ timeout: 5000 });
+    }
 
-    // Step 2 -> Step 3
-    await skipOrContinue();
-    await expect(page.getByRole('heading', { name: /step 3/i })).toBeVisible({
-      timeout: 5000,
-    });
-
-    // Step 3 -> Step 4
-    await skipOrContinue();
-    await expect(page.getByRole('heading', { name: /step 4/i })).toBeVisible({
-      timeout: 5000,
-    });
-
-    // Step 4 -> Step 5
-    await skipOrContinue();
-    await expect(page.getByRole('heading', { name: /step 5/i })).toBeVisible({
-      timeout: 5000,
-    });
-
-    // Step 5 -> Step 6 (Review)
-    await skipOrContinue();
-    await expect(page.getByRole('heading', { name: /step 6/i })).toBeVisible({
-      timeout: 5000,
-    });
-
-    // Accept declaration
+    // Accept declaration and submit
     const declarationCheckbox = page.locator('input[type="checkbox"]').last();
     await declarationCheckbox.check();
-
-    // Submit Application
     await page.getByRole('button', { name: /submit application/i }).click();
 
-    // Wait for redirect to payment checkout or applications list
-    await page.waitForURL(/\/(payments\/checkout|applications)/, {
-      timeout: 15000,
-    });
+    await page.waitForURL(/\/(payments\/checkout|applications)/, { timeout: 15000 });
 
-    // Navigate to applications list to verify submission
+    // Verify in applications list
     await page.goto('/applications');
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
+    await waitForLoad(page);
   });
 
-  // ─── Phase 2: Officer views pending and raises a query ────────────────
+  // ── Phase 2: Officer raises query with empty documentType ──────────────
 
-  test('Phase 2: Officer views pending applications and raises a query', async ({ page }) => {
+  test('Phase 2: Officer reviews application and raises query (empty documentType)', async ({
+    page,
+  }) => {
     await loginAs(page, 'officer');
     await page.goto('/verification');
 
     await expect(page.getByRole('heading', { name: /application verification/i })).toBeVisible();
+    await waitForLoad(page);
 
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
-
-    // Click the first Review link
     const reviewLinks = page.getByRole('link', { name: /review/i });
-    const reviewCount = await reviewLinks.count();
-
-    if (reviewCount === 0) {
-      // No pending applications - skip remaining steps
-      test.skip(true, 'No applications pending for officer review');
+    if ((await reviewLinks.count()) === 0) {
+      test.skip(true, 'No pending applications for officer review');
       return;
     }
 
@@ -169,82 +123,62 @@ test.describe.serial('Full Application Workflow (Cross-Role)', () => {
     // Navigate to Queries tab
     await page.getByRole('tab', { name: /queries/i }).click();
 
-    // Raise a query
+    // Raise a query WITHOUT selecting documentType (testing the known bug)
     await page.getByRole('button', { name: /raise query/i }).click();
-
-    await expect(page.getByRole('heading', { name: /raise query/i })).toBeVisible({
-      timeout: 5000,
-    });
+    await expect(page.getByRole('heading', { name: /raise query/i })).toBeVisible({ timeout: 5000 });
 
     await page
       .getByPlaceholder(/brief subject/i)
-      .fill('Workflow Test: Please clarify manufacturing capacity');
-
+      .fill('Workflow Test: Clarify manufacturing capacity');
     await page
       .getByPlaceholder(/describe the query in detail/i)
-      .fill(
-        'We need clarification on the manufacturing capacity details provided. Please provide the annual production figures.',
-      );
+      .fill('We need clarification on manufacturing capacity. Please provide annual production figures.');
 
+    // NOTE: documentType left empty intentionally -- this is the known bug
     await page.getByRole('button', { name: /send query/i }).click();
-
     await expect(page.getByText(/query raised successfully/i)).toBeVisible({ timeout: 10000 });
   });
 
-  // ─── Phase 3: OEM responds to the query ───────────────────────────────
+  // ── Phase 3: OEM responds to query ─────────────────────────────────────
 
-  test('Phase 3: OEM logs in and responds to the pending query', async ({ page }) => {
+  test('Phase 3: OEM accesses /queries and responds', async ({ page }) => {
     await loginAs(page, 'oem');
     await page.goto('/queries');
 
-    await expect(page.getByRole('heading', { name: /my queries/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /my queries|queries/i })).toBeVisible();
+    await waitForLoad(page);
 
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
-
-    // Look for the query we raised
     const respondLinks = page.getByRole('link', { name: /respond/i });
-    const respondCount = await respondLinks.count();
-
-    if (respondCount === 0) {
-      test.skip(true, 'No pending queries for OEM to respond');
+    if ((await respondLinks.count()) === 0) {
+      test.skip(true, 'No pending queries for OEM');
       return;
     }
 
-    // Click on the first Respond link
     await respondLinks.first().click();
     await page.waitForURL(/\/queries\//, { timeout: 10000 });
 
-    // Verify query detail page
     await expect(page.getByRole('heading', { name: /query details/i })).toBeVisible();
 
-    // Fill response message
     await page
       .getByPlaceholder(/provide your response/i)
       .fill(
-        'Our annual manufacturing capacity is 5000 units. We have attached the production report for reference.',
+        'Annual manufacturing capacity is 5000 units. Production report attached for reference.',
       );
 
-    // Submit response
     await page.getByRole('button', { name: /submit response/i }).click();
 
-    // Should redirect to queries list or show success
     await Promise.race([
       page.waitForURL(/\/queries$/, { timeout: 15000 }),
       expect(page.getByText(/response submitted successfully/i)).toBeVisible({ timeout: 15000 }),
     ]);
   });
 
-  // ─── Phase 4: Officer resolves query and forwards to committee ────────
+  // ── Phase 4: Officer resolves query and forwards to committee ──────────
 
-  test('Phase 4: Officer resolves the query and forwards to committee', async ({ page }) => {
+  test('Phase 4: Officer resolves query and forwards to committee', async ({ page }) => {
     await loginAs(page, 'officer');
     await page.goto('/verification');
-
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
+    await waitForLoad(page);
 
     const reviewLinks = page.getByRole('link', { name: /review/i });
     if ((await reviewLinks.count()) === 0) {
@@ -255,31 +189,19 @@ test.describe.serial('Full Application Workflow (Cross-Role)', () => {
     await reviewLinks.first().click();
     await page.waitForURL(/\/verification\//, { timeout: 10000 });
 
-    // Navigate to Queries tab and resolve the query
+    // Resolve query
     await page.getByRole('tab', { name: /queries/i }).click();
-
-    // Look for "Mark Resolved" button on responded queries
-    const resolveButton = page.getByRole('button', {
-      name: /mark resolved/i,
-    });
+    const resolveButton = page.getByRole('button', { name: /mark resolved/i });
     if (await resolveButton.isVisible().catch(() => false)) {
       await resolveButton.click();
-      await expect(page.getByText(/query resolved/i)).toBeVisible({
-        timeout: 10000,
-      });
+      await expect(page.getByText(/query resolved/i)).toBeVisible({ timeout: 10000 });
     }
 
-    // Navigate to Actions tab and forward to committee
+    // Forward to committee
     await page.getByRole('tab', { name: /actions/i }).click();
+    await expect(page.getByText(/verification actions/i)).toBeVisible({ timeout: 5000 });
 
-    await expect(page.getByText(/verification actions/i)).toBeVisible({
-      timeout: 5000,
-    });
-
-    // Click Forward to Committee
     await page.getByRole('button', { name: /forward to committee/i }).click();
-
-    // Dialog opens
     await expect(page.getByRole('heading', { name: /forward to committee/i })).toBeVisible({
       timeout: 5000,
     });
@@ -290,24 +212,20 @@ test.describe.serial('Full Application Workflow (Cross-Role)', () => {
 
     await page.getByRole('button', { name: /confirm forward/i }).click();
 
-    // Should redirect or show success
     await Promise.race([
       page.waitForURL(/\/verification$/, { timeout: 15000 }),
       expect(page.getByText(/forwarded to committee/i)).toBeVisible({ timeout: 15000 }),
     ]);
   });
 
-  // ─── Phase 5: Committee evaluates and recommends approval ─────────────
+  // ── Phase 5: Committee evaluates ───────────────────────────────────────
 
-  test('Phase 5: Committee member evaluates and recommends approval', async ({ page }) => {
+  test('Phase 5: Committee evaluates with passing scores and approves', async ({ page }) => {
     await loginAs(page, 'committee');
     await page.goto('/committee/pending');
 
     await expect(page.getByRole('heading', { name: /pending committee review/i })).toBeVisible();
-
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
+    await waitForLoad(page);
 
     const evaluateLinks = page.getByRole('link', { name: /evaluate/i });
     if ((await evaluateLinks.count()) === 0) {
@@ -318,36 +236,29 @@ test.describe.serial('Full Application Workflow (Cross-Role)', () => {
     await evaluateLinks.first().click();
     await page.waitForURL(/\/committee\/evaluate\//, { timeout: 10000 });
 
-    // Wait for scoring form
-    await expect(page.getByText(/evaluation scoring/i)).toBeVisible({
-      timeout: 10000,
-    });
+    await expect(page.getByText(/evaluation scoring/i)).toBeVisible({ timeout: 10000 });
 
-    // Fill all 8 criteria scores (high scores for approval)
+    // Fill 8 criteria scores (passing: 66/80)
     const scoreInputs = page.locator('input[type="number"].w-20');
-    const scores = [9, 8, 9, 8, 9, 8, 8, 7]; // Total: 66/80 (passing)
-
+    const scores = [9, 8, 9, 8, 9, 8, 8, 7];
     const inputCount = await scoreInputs.count();
+
     for (let i = 0; i < Math.min(inputCount, scores.length); i++) {
       await scoreInputs.nth(i).fill('');
       await scoreInputs.nth(i).fill(String(scores[i]));
     }
 
-    // Select recommendation: Approve
+    // Select Approve
     const recommendTrigger = page
       .locator('button')
       .filter({ hasText: /select your recommendation/i });
     await recommendTrigger.click();
     await page.getByRole('option', { name: /approve/i }).click();
 
-    // Fill overall remarks
     await page
       .getByPlaceholder(/provide overall assessment/i)
-      .fill(
-        'Full workflow test: Company demonstrates strong technical capability. All criteria met. Recommend full approval.',
-      );
+      .fill('Full workflow test: Strong technical capability. All criteria met. Recommend approval.');
 
-    // Submit evaluation
     await page.getByRole('button', { name: /submit evaluation/i }).click();
 
     await Promise.race([
@@ -356,81 +267,57 @@ test.describe.serial('Full Application Workflow (Cross-Role)', () => {
     ]);
   });
 
-  // ─── Phase 6: Officer finalizes approval ──────────────────────────────
+  // ── Phase 6: Officer verifies committee result ─────────────────────────
 
-  test('Phase 6: Officer reviews committee result and application status', async ({ page }) => {
+  test('Phase 6: Officer checks post-evaluation application status', async ({ page }) => {
     await loginAs(page, 'officer');
     await page.goto('/verification');
+    await waitForLoad(page);
 
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
-
-    // Look for any applications to verify the workflow progressed
     const reviewLinks = page.getByRole('link', { name: /review/i });
     const count = await reviewLinks.count();
 
     if (count === 0) {
-      // Check from the officer dashboard if any applications show updated status
+      // Check officer dashboard for aggregate stats
       await page.goto('/dashboard/officer');
-      await page
-        .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-        .catch(() => {});
-
-      // Dashboard should show the application data
+      await waitForLoad(page);
       await expect(page.getByRole('heading', { name: /officer dashboard/i })).toBeVisible();
-
-      // Verify dashboard stats are rendered (they should reflect the workflow)
       await expect(page.getByText(/total applications/i)).toBeVisible();
       return;
     }
 
-    // Open the first application
     await reviewLinks.first().click();
     await page.waitForURL(/\/verification\//, { timeout: 10000 });
 
-    // Verify the application details page renders
     await expect(page.locator('h1.text-2xl.font-bold')).toBeVisible();
 
-    // Check the status badge - after committee evaluation it may show
-    // COMMITTEE_REVIEWED, APPROVED, or similar status
+    // Status badge should be visible showing post-committee status
     const statusBadge = page.locator('[class*="badge"], [class*="Badge"]').first();
     await expect(statusBadge).toBeVisible();
   });
 
-  // ─── Phase 7: Verify final application status ─────────────────────────
+  // ── Phase 7: OEM verifies final status ─────────────────────────────────
 
-  test('Phase 7: OEM verifies application has progressed through workflow', async ({ page }) => {
+  test('Phase 7: OEM verifies application has progressed beyond draft', async ({ page }) => {
     await loginAs(page, 'oem');
     await page.goto('/applications');
 
     await expect(page.getByRole('heading', { name: /my applications/i })).toBeVisible();
+    await waitForLoad(page);
 
-    await page
-      .waitForSelector('.animate-spin', { state: 'hidden', timeout: 10000 })
-      .catch(() => {});
-
-    // Verify at least one application exists
     const applicationCards = page.locator('[class*="rounded-lg border"]');
     const appCount = await applicationCards.count();
     expect(appCount).toBeGreaterThan(0);
 
-    // Verify the most recent application has a status badge indicating progress
-    // After the full workflow, it should show something beyond DRAFT
-    const firstStatusBadge = page
-      .locator('[class*="rounded-lg border"]')
+    const firstStatusBadge = applicationCards
       .first()
       .locator('[class*="badge"], [class*="Badge"]');
-
     await expect(firstStatusBadge).toBeVisible({ timeout: 5000 });
 
-    // The status text should indicate the application has been processed
     const statusText = await firstStatusBadge.textContent();
     expect(statusText).toBeTruthy();
 
-    // It should not still be in DRAFT if the workflow completed
-    // Acceptable statuses: Submitted, Under Review, Committee Review,
-    // Approved, Payment Pending, etc.
+    // If the workflow completed, status should not be DRAFT
     const processedStatuses = [
       'submitted',
       'under review',
@@ -443,11 +330,10 @@ test.describe.serial('Full Application Workflow (Cross-Role)', () => {
       'evaluated',
     ];
 
-    const hasProcessedStatus = processedStatuses.some((s) => statusText?.toLowerCase().includes(s));
+    const hasProcessedStatus = processedStatuses.some((s) =>
+      statusText?.toLowerCase().includes(s),
+    );
 
-    // If application was processed, verify the status is not draft
-    // (It is okay if it is still draft because the submit may have
-    //  been blocked by missing documents in the test environment)
     if (hasProcessedStatus) {
       expect(statusText?.toLowerCase()).not.toBe('draft');
     }

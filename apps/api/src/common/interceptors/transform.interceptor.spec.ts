@@ -1,11 +1,10 @@
 import { TransformInterceptor, ApiResponse } from './transform.interceptor';
 import { CallHandler, ExecutionContext } from '@nestjs/common';
-import { of, lastValueFrom } from 'rxjs';
+import { of, lastValueFrom, throwError } from 'rxjs';
 
 describe('TransformInterceptor', () => {
   let interceptor: TransformInterceptor<any>;
   let mockContext: ExecutionContext;
-  let mockCallHandler: CallHandler;
 
   beforeEach(() => {
     interceptor = new TransformInterceptor();
@@ -16,109 +15,173 @@ describe('TransformInterceptor', () => {
     return { handle: () => of(data) };
   }
 
-  it('should wrap response data in { success: true, data, timestamp }', async () => {
-    const handler = createCallHandler({ id: 1, name: 'test' });
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
-
-    expect(result.success).toBe(true);
-    expect(result.data).toEqual({ id: 1, name: 'test' });
-    expect(result.timestamp).toBeDefined();
+  it('should be defined', () => {
+    expect(interceptor).toBeDefined();
   });
 
-  it('should include a valid ISO timestamp', async () => {
-    const handler = createCallHandler('test');
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+  // ── Response wrapping in { success: true, data: ... } format ─────────
 
-    expect(new Date(result.timestamp).toISOString()).toBe(result.timestamp);
+  describe('wraps response in { success: true, data: ... } format', () => {
+    it('should wrap object response data', async () => {
+      const handler = createCallHandler({ id: 1, name: 'test' });
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ id: 1, name: 'test' });
+      expect(result.timestamp).toBeDefined();
+    });
+
+    it('should wrap string data', async () => {
+      const handler = createCallHandler('hello world');
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe('hello world');
+    });
+
+    it('should wrap number data', async () => {
+      const handler = createCallHandler(42);
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe(42);
+    });
+
+    it('should wrap boolean data (true)', async () => {
+      const handler = createCallHandler(true);
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe(true);
+    });
+
+    it('should wrap boolean data (false)', async () => {
+      const handler = createCallHandler(false);
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe(false);
+    });
+
+    it('should wrap null data', async () => {
+      const handler = createCallHandler(null);
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBeNull();
+    });
+
+    it('should wrap undefined data', async () => {
+      const handler = createCallHandler(undefined);
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBeUndefined();
+    });
+
+    it('should wrap array data', async () => {
+      const arrayData = [{ id: 1 }, { id: 2 }, { id: 3 }];
+      const handler = createCallHandler(arrayData);
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(arrayData);
+      expect(Array.isArray(result.data)).toBe(true);
+    });
+
+    it('should wrap empty array data', async () => {
+      const handler = createCallHandler([]);
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([]);
+    });
+
+    it('should wrap empty object data', async () => {
+      const handler = createCallHandler({});
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({});
+    });
+
+    it('should wrap nested object data', async () => {
+      const nested = { user: { profile: { name: 'John' } }, roles: ['admin'] };
+      const handler = createCallHandler(nested);
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.data).toEqual(nested);
+    });
   });
 
-  it('should handle null data', async () => {
-    const handler = createCallHandler(null);
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+  // ── Success field ────────────────────────────────────────────────────
 
-    expect(result.success).toBe(true);
-    expect(result.data).toBeNull();
+  describe('success field', () => {
+    it('should always set success to true', async () => {
+      const handler = createCallHandler({ error: true });
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(result.success).toBe(true);
+    });
   });
 
-  it('should handle undefined data', async () => {
-    const handler = createCallHandler(undefined);
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+  // ── Timestamp field ──────────────────────────────────────────────────
 
-    expect(result.success).toBe(true);
-    expect(result.data).toBeUndefined();
+  describe('timestamp field', () => {
+    it('should include a valid ISO timestamp', async () => {
+      const handler = createCallHandler('test');
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(new Date(result.timestamp).toISOString()).toBe(result.timestamp);
+    });
   });
 
-  it('should handle array data', async () => {
-    const arrayData = [{ id: 1 }, { id: 2 }, { id: 3 }];
-    const handler = createCallHandler(arrayData);
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+  // ── Response shape ───────────────────────────────────────────────────
 
-    expect(result.success).toBe(true);
-    expect(result.data).toEqual(arrayData);
-    expect(Array.isArray(result.data)).toBe(true);
+  describe('response shape', () => {
+    it('should have exactly three keys: success, data, timestamp', async () => {
+      const handler = createCallHandler('data');
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+
+      expect(Object.keys(result)).toEqual(expect.arrayContaining(['success', 'data', 'timestamp']));
+      expect(Object.keys(result)).toHaveLength(3);
+    });
   });
 
-  it('should handle empty array data', async () => {
-    const handler = createCallHandler([]);
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+  // ── Error propagation ────────────────────────────────────────────────
 
-    expect(result.success).toBe(true);
-    expect(result.data).toEqual([]);
+  describe('error propagation', () => {
+    it('should not catch errors from the handler (let them propagate)', async () => {
+      const handler: CallHandler = {
+        handle: () => throwError(() => new Error('Handler error')),
+      };
+
+      await expect(
+        lastValueFrom(interceptor.intercept(mockContext, handler)),
+      ).rejects.toThrow('Handler error');
+    });
+
+    it('should propagate typed errors without wrapping them', async () => {
+      const handler: CallHandler = {
+        handle: () => throwError(() => new TypeError('Type mismatch')),
+      };
+
+      await expect(
+        lastValueFrom(interceptor.intercept(mockContext, handler)),
+      ).rejects.toThrow(TypeError);
+    });
   });
 
-  it('should handle string data', async () => {
-    const handler = createCallHandler('hello world');
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
+  // ── Large payload ────────────────────────────────────────────────────
 
-    expect(result.success).toBe(true);
-    expect(result.data).toBe('hello world');
-  });
+  describe('large payload', () => {
+    it('should handle large payload', async () => {
+      const largeArray = Array.from({ length: 1000 }, (_, i) => ({ id: i }));
+      const handler = createCallHandler(largeArray);
+      const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
 
-  it('should handle number data', async () => {
-    const handler = createCallHandler(42);
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
-
-    expect(result.success).toBe(true);
-    expect(result.data).toBe(42);
-  });
-
-  it('should handle boolean data', async () => {
-    const handler = createCallHandler(true);
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
-
-    expect(result.success).toBe(true);
-    expect(result.data).toBe(true);
-  });
-
-  it('should handle nested object data', async () => {
-    const nested = { user: { profile: { name: 'John' } }, roles: ['admin'] };
-    const handler = createCallHandler(nested);
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
-
-    expect(result.data).toEqual(nested);
-  });
-
-  it('should always set success to true', async () => {
-    const handler = createCallHandler({ error: true });
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
-
-    expect(result.success).toBe(true);
-  });
-
-  it('should have exactly three keys in the response', async () => {
-    const handler = createCallHandler('data');
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
-
-    expect(Object.keys(result)).toEqual(expect.arrayContaining(['success', 'data', 'timestamp']));
-    expect(Object.keys(result)).toHaveLength(3);
-  });
-
-  it('should handle large payload', async () => {
-    const largeArray = Array.from({ length: 1000 }, (_, i) => ({ id: i }));
-    const handler = createCallHandler(largeArray);
-    const result = await lastValueFrom(interceptor.intercept(mockContext, handler));
-
-    expect(result.success).toBe(true);
-    expect(result.data).toHaveLength(1000);
+      expect(result.success).toBe(true);
+      expect(result.data).toHaveLength(1000);
+    });
   });
 });
