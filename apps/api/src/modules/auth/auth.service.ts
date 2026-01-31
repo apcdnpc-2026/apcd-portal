@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
@@ -162,6 +167,43 @@ export class AuthService {
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  /**
+   * Reset test user passwords (for CI/CD integration testing).
+   * Protected by SEED_SECRET environment variable.
+   */
+  async resetTestPasswords(secret: string) {
+    const seedSecret = this.configService.get<string>('SEED_SECRET', 'apcd-seed-2025');
+    if (secret !== seedSecret) {
+      throw new ForbiddenException('Invalid seed secret');
+    }
+
+    const testUsers = [
+      { email: 'admin@npcindia.gov.in', password: 'Admin@APCD2025!' },
+      { email: 'officer@npcindia.gov.in', password: 'Officer@APCD2025!' },
+      { email: 'head@npcindia.gov.in', password: 'Head@APCD2025!' },
+      { email: 'committee@npcindia.gov.in', password: 'Committee@APCD2025!' },
+      { email: 'fieldverifier@npcindia.gov.in', password: 'Field@APCD2025!' },
+      { email: 'dealinghand@npcindia.gov.in', password: 'Dealing@APCD2025!' },
+      { email: 'oem@testcompany.com', password: 'Oem@APCD2025!' },
+    ];
+
+    const results: { email: string; updated: boolean }[] = [];
+    for (const u of testUsers) {
+      const user = await this.prisma.user.findUnique({ where: { email: u.email } });
+      if (user) {
+        const hash = await bcrypt.hash(u.password, 12);
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { passwordHash: hash },
+        });
+        results.push({ email: u.email, updated: true });
+      } else {
+        results.push({ email: u.email, updated: false });
+      }
+    }
+    return { message: 'Test passwords reset', results };
   }
 
   /**

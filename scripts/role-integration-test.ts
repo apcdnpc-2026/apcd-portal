@@ -525,6 +525,26 @@ async function phase0_Authentication() {
     );
   });
 
+  // Reset test user passwords via API (bypasses seed issues)
+  await test('Reset test user passwords', async () => {
+    const res = await fetchJSON(`${API_URL}/api/auth/reset-test-passwords`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-seed-secret': 'apcd-seed-2025',
+      },
+    });
+    if (res.status === 200) {
+      const results = res.body?.results || [];
+      const updated = results.filter((r: { updated: boolean }) => r.updated).length;
+      console.log(`        ${dim(`Passwords reset: ${updated}/${results.length} users`)}`);
+    } else {
+      console.log(
+        `        ${dim(`Password reset not available (${res.status}) — using existing passwords`)}`,
+      );
+    }
+  });
+
   for (const [roleKey, creds] of Object.entries(CREDENTIALS)) {
     await test(`Login as ${roleKey} (${creds.email})`, async () => {
       const res = await fetchJSON(`${API_URL}/api/auth/login`, {

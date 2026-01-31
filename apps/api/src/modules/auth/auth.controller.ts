@@ -1,20 +1,12 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  UseGuards,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Post, Get, Body, Headers, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+
+import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { Public } from '../../common/decorators/public.decorator';
-import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator';
+import { RegisterDto } from './dto/register.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -58,5 +50,13 @@ export class AuthController {
   async logout(@CurrentUser() user: JwtPayload) {
     await this.authService.logout(user.sub);
     return { message: 'Logged out successfully' };
+  }
+
+  @Public()
+  @Post('reset-test-passwords')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset test user passwords (CI/CD only)' })
+  async resetTestPasswords(@Headers('x-seed-secret') secret: string) {
+    return this.authService.resetTestPasswords(secret);
   }
 }
