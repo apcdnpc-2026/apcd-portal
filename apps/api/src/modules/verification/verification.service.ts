@@ -113,6 +113,15 @@ export class VerificationService {
       throw new NotFoundException('Application not found');
     }
 
+    // Sanitise optional fields: frontend may send empty strings
+    const documentType = dto.documentType && dto.documentType.trim() !== ''
+      ? (dto.documentType as any)
+      : undefined;
+
+    const deadline = dto.deadline
+      ? new Date(typeof dto.deadline === 'string' ? dto.deadline.split('-').reverse().join('-') : dto.deadline)
+      : undefined;
+
     // Create query record
     const query = await this.prisma.query.create({
       data: {
@@ -120,8 +129,8 @@ export class VerificationService {
         raisedById: officerId,
         subject: dto.subject,
         description: dto.description,
-        documentType: dto.documentType as any,
-        deadline: dto.deadline,
+        documentType,
+        deadline: deadline && !isNaN(deadline.getTime()) ? deadline : undefined,
         status: QueryStatus.OPEN,
       },
     });
