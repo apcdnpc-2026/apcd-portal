@@ -30,7 +30,17 @@ export class GeoTagValidatorService {
     try {
       const exif = await exifr.parse(buffer, {
         gps: true,
-        pick: ['latitude', 'longitude', 'DateTimeOriginal', 'GPSDateStamp', 'GPSTimeStamp'],
+        pick: [
+          'latitude',
+          'longitude',
+          'DateTimeOriginal',
+          'GPSDateStamp',
+          'GPSTimeStamp',
+          'GPSLatitude',
+          'GPSLatitudeRef',
+          'GPSLongitude',
+          'GPSLongitudeRef',
+        ],
       });
 
       if (!exif) {
@@ -45,8 +55,10 @@ export class GeoTagValidatorService {
       const hasGps =
         typeof exif.latitude === 'number' &&
         typeof exif.longitude === 'number' &&
-        exif.latitude >= -90 && exif.latitude <= 90 &&
-        exif.longitude >= -180 && exif.longitude <= 180;
+        exif.latitude >= -90 &&
+        exif.latitude <= 90 &&
+        exif.longitude >= -180 &&
+        exif.longitude <= 180;
 
       const hasTimestamp = !!exif.DateTimeOriginal;
 

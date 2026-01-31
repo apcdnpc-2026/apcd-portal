@@ -60,7 +60,8 @@ const state: {
   applicationNumber?: string;
   attachmentIds: string[];
   queryId?: string;
-} = { tokens: {}, attachmentIds: [] };
+  apcdTypeIds: string[];
+} = { tokens: {}, attachmentIds: [], apcdTypeIds: [] };
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
@@ -186,14 +187,285 @@ startxref
   return Buffer.from(content, 'utf-8');
 }
 
-function generateDummyPNG(): Buffer {
-  // Minimal valid 1x1 white pixel PNG
-  return Buffer.from(
-    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489' +
-      '0000000a49444154789c626000000002000198e195280000000049454e44ae426082',
-    'hex',
-  );
+/**
+ * Generate a minimal valid JPEG with EXIF GPS coordinates (Delhi, India)
+ * and DateTimeOriginal timestamp. Passes NestJS FileTypeValidator and exifr parsing.
+ */
+function generateGeoTaggedJPEG(): Buffer {
+  // Build TIFF/EXIF data (little-endian) with GPS coords: 28°37'N 77°13'E (Delhi)
+  const tiff = Buffer.alloc(178);
+  let o = 0;
+
+  // TIFF header
+  tiff.write('II', o);
+  o += 2;
+  tiff.writeUInt16LE(42, o);
+  o += 2;
+  tiff.writeUInt32LE(8, o);
+  o += 4;
+
+  // IFD0 at offset 8: 2 entries (ExifIFD ptr + GPS IFD ptr)
+  tiff.writeUInt16LE(2, o);
+  o += 2;
+  // ExifIFD pointer (tag 0x8769)
+  tiff.writeUInt16LE(0x8769, o);
+  o += 2;
+  tiff.writeUInt16LE(4, o);
+  o += 2;
+  tiff.writeUInt32LE(1, o);
+  o += 4;
+  tiff.writeUInt32LE(38, o);
+  o += 4;
+  // GPS IFD pointer (tag 0x8825)
+  tiff.writeUInt16LE(0x8825, o);
+  o += 2;
+  tiff.writeUInt16LE(4, o);
+  o += 2;
+  tiff.writeUInt32LE(1, o);
+  o += 4;
+  tiff.writeUInt32LE(56, o);
+  o += 4;
+  tiff.writeUInt32LE(0, o);
+  o += 4; // next IFD = none
+
+  // ExifIFD at offset 38: DateTimeOriginal
+  tiff.writeUInt16LE(1, o);
+  o += 2;
+  tiff.writeUInt16LE(0x9003, o);
+  o += 2;
+  tiff.writeUInt16LE(2, o);
+  o += 2;
+  tiff.writeUInt32LE(20, o);
+  o += 4;
+  tiff.writeUInt32LE(110, o);
+  o += 4;
+  tiff.writeUInt32LE(0, o);
+  o += 4;
+
+  // GPS IFD at offset 56: LatRef, Lat, LngRef, Lng
+  tiff.writeUInt16LE(4, o);
+  o += 2;
+  // GPSLatitudeRef = "N"
+  tiff.writeUInt16LE(1, o);
+  o += 2;
+  tiff.writeUInt16LE(2, o);
+  o += 2;
+  tiff.writeUInt32LE(2, o);
+  o += 4;
+  tiff[o] = 0x4e;
+  tiff[o + 1] = 0;
+  tiff[o + 2] = 0;
+  tiff[o + 3] = 0;
+  o += 4;
+  // GPSLatitude (3 rationals at offset 130)
+  tiff.writeUInt16LE(2, o);
+  o += 2;
+  tiff.writeUInt16LE(5, o);
+  o += 2;
+  tiff.writeUInt32LE(3, o);
+  o += 4;
+  tiff.writeUInt32LE(130, o);
+  o += 4;
+  // GPSLongitudeRef = "E"
+  tiff.writeUInt16LE(3, o);
+  o += 2;
+  tiff.writeUInt16LE(2, o);
+  o += 2;
+  tiff.writeUInt32LE(2, o);
+  o += 4;
+  tiff[o] = 0x45;
+  tiff[o + 1] = 0;
+  tiff[o + 2] = 0;
+  tiff[o + 3] = 0;
+  o += 4;
+  // GPSLongitude (3 rationals at offset 154)
+  tiff.writeUInt16LE(4, o);
+  o += 2;
+  tiff.writeUInt16LE(5, o);
+  o += 2;
+  tiff.writeUInt32LE(3, o);
+  o += 4;
+  tiff.writeUInt32LE(154, o);
+  o += 4;
+  tiff.writeUInt32LE(0, o);
+  o += 4; // next IFD = none
+
+  // Data area at offset 110
+  tiff.write('2025:06:15 10:30:00\0', o, 'ascii');
+  o += 20;
+  // Latitude: 28°37'0" → rationals (28/1, 37/1, 0/1)
+  tiff.writeUInt32LE(28, o);
+  o += 4;
+  tiff.writeUInt32LE(1, o);
+  o += 4;
+  tiff.writeUInt32LE(37, o);
+  o += 4;
+  tiff.writeUInt32LE(1, o);
+  o += 4;
+  tiff.writeUInt32LE(0, o);
+  o += 4;
+  tiff.writeUInt32LE(1, o);
+  o += 4;
+  // Longitude: 77°13'0" → rationals (77/1, 13/1, 0/1)
+  tiff.writeUInt32LE(77, o);
+  o += 4;
+  tiff.writeUInt32LE(1, o);
+  o += 4;
+  tiff.writeUInt32LE(13, o);
+  o += 4;
+  tiff.writeUInt32LE(1, o);
+  o += 4;
+  tiff.writeUInt32LE(0, o);
+  o += 4;
+  tiff.writeUInt32LE(1, o);
+  o += 4;
+
+  // Build APP1 segment: FF E1 + length + "Exif\0\0" + TIFF
+  const exifHdr = Buffer.from('457869660000', 'hex'); // "Exif\0\0"
+  const app1Len = 2 + exifHdr.length + tiff.length;
+  const app1 = Buffer.alloc(4 + exifHdr.length + tiff.length);
+  app1[0] = 0xff;
+  app1[1] = 0xe1;
+  app1.writeUInt16BE(app1Len, 2);
+  exifHdr.copy(app1, 4);
+  tiff.copy(app1, 4 + exifHdr.length);
+
+  // Minimal JPEG image data (DQT + SOF0 + DHT_DC + DHT_AC + SOS + scan + EOI)
+  // 1x1 pixel, 1 component (grayscale), all-1 quantization
+  const dqt = Buffer.alloc(69);
+  dqt[0] = 0xff;
+  dqt[1] = 0xdb;
+  dqt.writeUInt16BE(67, 2); // length
+  dqt[4] = 0x00; // table 0, 8-bit precision
+  for (let i = 0; i < 64; i++) dqt[5 + i] = 1;
+
+  // SOF0: 1x1 grayscale
+  const sof = Buffer.from([
+    0xff,
+    0xc0,
+    0x00,
+    0x0b,
+    0x08,
+    0x00,
+    0x01,
+    0x00,
+    0x01, // 1x1
+    0x01,
+    0x01,
+    0x11,
+    0x00, // 1 component, H=1 V=1, quant table 0
+  ]);
+
+  // DHT DC table 0: 1 code of length 2, value 0
+  const dhtDC = Buffer.from([
+    0xff,
+    0xc4,
+    0x00,
+    0x15,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00, // VALUES: category 0
+  ]);
+
+  // DHT AC table 0: 1 code of length 2, value 0x00 (EOB)
+  const dhtAC = Buffer.from([
+    0xff,
+    0xc4,
+    0x00,
+    0x15,
+    0x10,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x00, // VALUES: EOB
+  ]);
+
+  // SOS + compressed scan data (DC=0 + EOB, Huffman coded)
+  const sos = Buffer.from([
+    0xff,
+    0xda,
+    0x00,
+    0x08,
+    0x01,
+    0x01,
+    0x00,
+    0x00,
+    0x3f,
+    0x00,
+    0x54,
+    0x00, // scan data: 2 codes + padding bits
+  ]);
+
+  return Buffer.concat([
+    Buffer.from([0xff, 0xd8]), // SOI
+    app1, // APP1 with EXIF GPS
+    dqt,
+    sof,
+    dhtDC,
+    dhtAC,
+    sos,
+    Buffer.from([0xff, 0xd9]), // EOI
+  ]);
 }
+
+// All 25 mandatory document types
+const MANDATORY_DOC_TYPES = [
+  'COMPANY_REGISTRATION',
+  'GST_CERTIFICATE',
+  'PAN_CARD',
+  'PAYMENT_PROOF',
+  'SERVICE_SUPPORT_UNDERTAKING',
+  'NON_BLACKLISTING_DECLARATION',
+  'TURNOVER_CERTIFICATE',
+  'ISO_CERTIFICATION',
+  'PRODUCT_DATASHEET',
+  'CLIENT_PERFORMANCE_CERT',
+  'TEST_CERTIFICATE',
+  'DESIGN_CALCULATIONS',
+  'MATERIAL_CONSTRUCTION_CERT',
+  'WARRANTY_DOCUMENT',
+  'BANK_SOLVENCY_CERT',
+  'INSTALLATION_EXPERIENCE',
+  'CONSENT_TO_OPERATE',
+  'GEO_TAGGED_PHOTOS',
+  'TECHNICAL_CATALOGUE',
+  'ORG_CHART',
+  'STAFF_QUALIFICATION_PROOF',
+  'GST_FILING_PROOF',
+  'NO_LEGAL_DISPUTES_AFFIDAVIT',
+  'COMPLAINT_HANDLING_POLICY',
+  'ESCALATION_MECHANISM',
+];
+
+const GEO_PHOTO_SLOTS = ['FRONT_VIEW', 'MANUFACTURING_AREA'];
 
 async function uploadFile(
   role: string,
@@ -201,6 +473,7 @@ async function uploadFile(
   documentType: string,
   fileBuffer: Buffer,
   fileName: string,
+  extras?: Record<string, string>,
 ) {
   const token = state.tokens[role];
   if (!token) throw new Error(`No token for role "${role}"`);
@@ -208,6 +481,9 @@ async function uploadFile(
   const formData = new FormData();
   formData.append('applicationId', applicationId);
   formData.append('documentType', documentType);
+  if (extras) {
+    for (const [k, v] of Object.entries(extras)) formData.append(k, v);
+  }
   // Determine MIME type from file extension to avoid application/octet-stream
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   const mimeMap: Record<string, string> = {
@@ -352,13 +628,27 @@ async function phase1_OEMApplication() {
     console.log(`        ${dim(`Application: ${app.applicationNumber} (${app.id})`)}`);
   });
 
-  // Update application with step data
-  await test('OEM updates application with form data', async () => {
+  // Fetch available APCD types for empanelment selection
+  await test('OEM fetches APCD types', async () => {
+    const res = await fetchJSON(`${API_URL}/api/apcd-types`);
+    assert(res.status === 200, `APCD types failed: ${res.status}`);
+    const data = res.body?.data || res.body;
+    const types = Array.isArray(data) ? data : [];
+    assert(types.length > 0, 'No APCD types available');
+    // Pick first 2 types (or fewer) for empanelment
+    state.apcdTypeIds = types.slice(0, 2).map((t: any) => t.id);
+    console.log(
+      `        ${dim(`APCD types available: ${types.length}, selected: ${state.apcdTypeIds.length}`)}`,
+    );
+  });
+
+  // Update application with full form data including APCD selections and contact persons
+  await test('OEM updates application with complete form data', async () => {
     if (!state.applicationId) throw new Error('No applicationId');
     const res = await authFetch('oem', `/api/applications/${state.applicationId}`, {
       method: 'PUT',
       body: JSON.stringify({
-        currentStep: 2,
+        currentStep: 9,
         contactPersons: [
           {
             type: 'COMMERCIAL',
@@ -375,12 +665,21 @@ async function phase1_OEMApplication() {
             email: 'technical@test.com',
           },
         ],
+        apcdSelections: state.apcdTypeIds.map((id) => ({
+          apcdTypeId: id,
+          isManufactured: true,
+          seekingEmpanelment: true,
+          installationCategory: 'BOTH',
+          designCapacityRange: '1000-5000 m3/hr',
+        })),
         turnoverYear1: 50000000,
         turnoverYear2: 60000000,
         turnoverYear3: 70000000,
         hasISO9001: true,
         hasISO14001: true,
+        hasISO45001: true,
         isBlacklisted: false,
+        hasGrievanceSystem: true,
         declarationAccepted: true,
         declarationSignatory: 'Test CEO',
       }),
@@ -388,47 +687,155 @@ async function phase1_OEMApplication() {
     assert(res.status === 200, `Update app failed: ${res.status} — ${res.text.substring(0, 200)}`);
   });
 
-  // Upload PDF document
-  await test('OEM uploads PDF document (COMPANY_REGISTRATION)', async () => {
+  // Bulk create installation experiences (3 per APCD type)
+  await test('OEM creates installation experiences', async () => {
     if (!state.applicationId) throw new Error('No applicationId');
-    const pdf = generateDummyPDF();
-    const res = await uploadFile(
-      'oem',
-      state.applicationId,
-      'COMPANY_REGISTRATION',
-      pdf,
-      'company-registration.pdf',
-    );
+    const entries = [];
+    const count = Math.max(state.apcdTypeIds.length * 3, 3);
+    for (let i = 0; i < count; i++) {
+      entries.push({
+        industryName: `Test Industry ${i + 1}`,
+        location: `Industrial Area Phase-${i + 1}, Delhi NCR`,
+        installationDate: `2024-0${(i % 9) + 1}-15`,
+        emissionSource: 'Boiler flue gas',
+        apcdType: 'Bag Filter',
+        apcdCapacity: `${(i + 1) * 500} m3/hr`,
+        performanceResult: 'Within CPCB norms — SPM < 50 mg/Nm3',
+      });
+    }
+    const res = await authFetch('oem', `/api/installation-experience/${state.applicationId}/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ entries }),
+    });
     assert(
       res.status === 200 || res.status === 201,
-      `PDF upload failed: ${res.status} — ${res.text.substring(0, 200)}`,
+      `Bulk install exp failed: ${res.status} — ${res.text.substring(0, 200)}`,
     );
-    const attachment = res.body?.data || res.body;
-    if (attachment?.id) {
-      state.attachmentIds.push(attachment.id);
-      console.log(`        ${dim(`Attachment ID: ${attachment.id}`)}`);
-    }
+    console.log(`        ${dim(`Created ${count} installation experiences`)}`);
   });
 
-  // Upload PNG image
-  await test('OEM uploads PNG image (GST_CERTIFICATE)', async () => {
+  // Bulk create staff details (2 B.Tech engineers minimum)
+  await test('OEM creates staff details', async () => {
     if (!state.applicationId) throw new Error('No applicationId');
-    const png = generateDummyPNG();
-    const res = await uploadFile(
-      'oem',
-      state.applicationId,
-      'GST_CERTIFICATE',
-      png,
-      'gst-certificate.png',
-    );
+    const staffList = [
+      {
+        name: 'Rajesh Kumar',
+        designation: 'Senior Design Engineer',
+        qualification: 'B.Tech Mechanical Engineering',
+        experienceYears: 8,
+        employeeId: 'EMP001',
+        mobileNo: '9876543201',
+      },
+      {
+        name: 'Priya Sharma',
+        designation: 'Project Engineer',
+        qualification: 'M.Tech Environmental Engineering',
+        experienceYears: 5,
+        employeeId: 'EMP002',
+        mobileNo: '9876543202',
+      },
+      {
+        name: 'Amit Verma',
+        designation: 'Quality Manager',
+        qualification: 'B.Tech Chemical Engineering',
+        experienceYears: 10,
+        employeeId: 'EMP003',
+        isFieldVisitCoordinator: true,
+        mobileNo: '9876543203',
+      },
+    ];
+    const res = await authFetch('oem', `/api/staff-details/${state.applicationId}/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ staffList }),
+    });
     assert(
       res.status === 200 || res.status === 201,
-      `PNG upload failed: ${res.status} — ${res.text.substring(0, 200)}`,
+      `Bulk staff failed: ${res.status} — ${res.text.substring(0, 200)}`,
     );
-    const attachment = res.body?.data || res.body;
-    if (attachment?.id) {
-      state.attachmentIds.push(attachment.id);
+    console.log(`        ${dim(`Created ${staffList.length} staff members`)}`);
+  });
+
+  // Upload all 25 mandatory documents
+  await test('OEM uploads all mandatory documents', async () => {
+    if (!state.applicationId) throw new Error('No applicationId');
+    const pdf = generateDummyPDF();
+    const geoJpeg = generateGeoTaggedJPEG();
+    let uploaded = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const docType of MANDATORY_DOC_TYPES) {
+      if (docType === 'GEO_TAGGED_PHOTOS') {
+        // Upload 2 geo-tagged photos with different slots
+        for (const slot of GEO_PHOTO_SLOTS) {
+          const res = await uploadFile(
+            'oem',
+            state.applicationId!,
+            docType,
+            geoJpeg,
+            `geo-photo-${slot.toLowerCase()}.jpg`,
+            { photoSlot: slot },
+          );
+          if (res.status === 200 || res.status === 201) {
+            uploaded++;
+            const att = res.body?.data || res.body;
+            if (att?.id) state.attachmentIds.push(att.id);
+          } else {
+            failed++;
+            const errMsg = res.body?.message || res.text?.substring(0, 120);
+            errors.push(`${docType}/${slot}: ${res.status} — ${errMsg}`);
+          }
+        }
+      } else {
+        const res = await uploadFile(
+          'oem',
+          state.applicationId!,
+          docType,
+          pdf,
+          `${docType.toLowerCase().replace(/_/g, '-')}.pdf`,
+        );
+        if (res.status === 200 || res.status === 201) {
+          uploaded++;
+          const att = res.body?.data || res.body;
+          if (att?.id && state.attachmentIds.length < 3) state.attachmentIds.push(att.id);
+        } else {
+          failed++;
+          const errMsg = res.body?.message || res.text?.substring(0, 120);
+          errors.push(`${docType}: ${res.status} — ${errMsg}`);
+        }
+      }
     }
+    console.log(`        ${dim(`Uploaded: ${uploaded}, Failed: ${failed}`)}`);
+    if (errors.length > 0) {
+      console.log(
+        `        ${dim(`Errors: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? '...' : ''}`)}`,
+      );
+    }
+    assert(
+      uploaded >= 20,
+      `Too many upload failures: ${failed} failed (${errors.slice(0, 3).join('; ')})`,
+    );
+  });
+
+  // Record manual payment
+  await test('OEM records manual payment', async () => {
+    if (!state.applicationId) throw new Error('No applicationId');
+    const res = await authFetch('oem', '/api/payments/manual', {
+      method: 'POST',
+      body: JSON.stringify({
+        applicationId: state.applicationId,
+        paymentType: 'APPLICATION_FEE',
+        baseAmount: 25000,
+        utrNumber: `UTR${Date.now()}`,
+        neftDate: new Date().toISOString().split('T')[0],
+        remitterBankName: 'State Bank of India',
+      }),
+    });
+    assert(
+      res.status === 200 || res.status === 201,
+      `Payment failed: ${res.status} — ${res.text.substring(0, 200)}`,
+    );
+    console.log(`        ${dim('Manual payment recorded')}`);
   });
 
   // Submit application
@@ -437,7 +844,18 @@ async function phase1_OEMApplication() {
     const res = await authFetch('oem', `/api/applications/${state.applicationId}/submit`, {
       method: 'POST',
     });
-    // May fail if mandatory fields/docs missing; that's still a valid test result
+    if (res.status === 400) {
+      // NestJS may nest errors in different formats
+      const errs: string[] =
+        res.body?.errors ||
+        res.body?.message?.errors ||
+        (Array.isArray(res.body?.message) ? res.body.message : []);
+      if (errs.length > 0) {
+        console.log(`        ${dim(`Validation errors (${errs.length}):`)}`);
+        for (const e of errs.slice(0, 8)) console.log(`          ${dim(`- ${e}`)}`);
+        if (errs.length > 8) console.log(`          ${dim(`... and ${errs.length - 8} more`)}`);
+      }
+    }
     assert(
       res.status === 200 || res.status === 201,
       `Submit failed: ${res.status} — ${res.text.substring(0, 300)}`,
