@@ -61,6 +61,7 @@ const state: {
   attachmentIds: string[];
   queryId?: string;
   apcdTypeIds: string[];
+  paymentId?: string;
 } = { tokens: {}, attachmentIds: [], apcdTypeIds: [] };
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
@@ -835,7 +836,28 @@ async function phase1_OEMApplication() {
       res.status === 200 || res.status === 201,
       `Payment failed: ${res.status} — ${res.text.substring(0, 200)}`,
     );
-    console.log(`        ${dim('Manual payment recorded')}`);
+    const payment = res.body?.data || res.body;
+    state.paymentId = payment?.id;
+    console.log(`        ${dim(`Manual payment recorded (id: ${state.paymentId})`)}`);
+  });
+
+  // Officer verifies the manual payment so it counts toward submission
+  await test('Officer verifies manual payment', async () => {
+    if (!state.paymentId) throw new Error('No paymentId from manual payment step');
+    if (!state.tokens.officer) throw new Error('Officer login failed — cannot verify payment');
+    const res = await authFetch('officer', `/api/payments/${state.paymentId}/verify`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        isVerified: true,
+        remarks: 'Integration test: payment verified',
+      }),
+    });
+    assert(
+      res.status === 200 || res.status === 201,
+      `Payment verification failed: ${res.status} — ${res.text.substring(0, 200)}`,
+    );
+    const payment = res.body?.data || res.body;
+    console.log(`        ${dim(`Payment status: ${payment?.status || 'unknown'}`)}`);
   });
 
   // Submit application

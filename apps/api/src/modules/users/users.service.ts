@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { Role } from '@apcd/database';
-import * as bcrypt from 'bcrypt';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 
-import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 @Injectable()
 export class UsersService {
