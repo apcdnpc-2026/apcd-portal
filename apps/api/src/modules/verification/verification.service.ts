@@ -118,8 +118,9 @@ export class VerificationService {
       ? (dto.documentType as any)
       : undefined;
 
-    const deadline = dto.deadline
-      ? new Date(typeof dto.deadline === 'string' ? dto.deadline.split('-').reverse().join('-') : dto.deadline)
+    const rawDeadline = dto.deadline as any;
+    const deadline = rawDeadline
+      ? new Date(typeof rawDeadline === 'string' ? rawDeadline.split('-').reverse().join('-') : rawDeadline)
       : undefined;
 
     // Create query record
