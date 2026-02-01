@@ -26,7 +26,7 @@ RUN pnpm --filter @apcd/shared build
 RUN pnpm --filter @apcd/api build
 
 # Pre-compile seed files so runner stage doesn't need tsx
-RUN npx esbuild packages/database/prisma/seed.ts \
+RUN ./node_modules/.bin/esbuild packages/database/prisma/seed.ts \
   --bundle --platform=node --format=cjs \
   --outfile=packages/database/prisma/seed-compiled.js \
   --external:@prisma/client --external:bcryptjs
