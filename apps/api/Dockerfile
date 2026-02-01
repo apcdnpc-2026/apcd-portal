@@ -26,9 +26,9 @@ RUN pnpm --filter @apcd/shared build
 RUN pnpm --filter @apcd/api build
 
 # Pre-compile seed files so runner stage doesn't need tsx
-# esbuild is a transitive dep not hoisted to root in pnpm — install it explicitly
-RUN npm install --no-save esbuild && \
-  npx esbuild packages/database/prisma/seed.ts \
+# esbuild is a transitive dep not hoisted to root in pnpm — install globally
+RUN npm install -g esbuild && \
+  esbuild packages/database/prisma/seed.ts \
     --bundle --platform=node --format=cjs \
     --outfile=packages/database/prisma/seed-compiled.js \
     --external:@prisma/client --external:bcryptjs
