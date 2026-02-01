@@ -76,7 +76,7 @@ test.describe('Certificate Verification', () => {
     if (headingCount > 0) {
       await expect(oemHeadings.first()).toBeVisible();
     } else {
-      await expect(emptyMessage.or(countText)).toBeVisible();
+      await expect(emptyMessage.or(countText).first()).toBeVisible();
     }
   });
 

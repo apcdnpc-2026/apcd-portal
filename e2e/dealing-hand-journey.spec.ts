@@ -67,6 +67,7 @@ test.describe('Dealing Hand Journey', () => {
   }) => {
     await loginAs(page, 'dealing-hand');
     await page.goto('/dealing-hand/payments');
+    await page.waitForLoadState('networkidle');
 
     if (page.url().includes('/unauthorized')) {
       test.skip();
