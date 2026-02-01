@@ -1,9 +1,10 @@
+/* eslint-env node */
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   eslint: { ignoreDuringBuilds: true },
-  typescript: { ignoreBuildErrors: true },
+  typescript: { ignoreBuildErrors: false },
   transpilePackages: ['@apcd/shared'],
   images: {
     domains: ['localhost'],

@@ -1,12 +1,12 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
 
 const companyProfileSchema = z.object({
   companyName: z.string().min(2, 'Company name is required'),
@@ -15,13 +15,20 @@ const companyProfileSchema = z.object({
   state: z.string().min(2, 'State is required'),
   district: z.string().min(2, 'District is required'),
   pincode: z.string().regex(/^\d{6}$/, 'Invalid pincode (6 digits required)'),
-  gstNumber: z.string().regex(/^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/, 'Invalid GST number (e.g. 22AAAAA0000A1Z5)'),
+  gstNumber: z
+    .string()
+    .regex(
+      /^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/,
+      'Invalid GST number (e.g. 22AAAAA0000A1Z5)',
+    ),
   panNumber: z.string().regex(/^[A-Z]{5}\d{4}[A-Z]{1}$/, 'Invalid PAN number (e.g. AAAAA0000A)'),
   cinNumber: z.string().optional(),
   authorizedPersonName: z.string().min(2, 'Authorized person name is required'),
   authorizedPersonDesignation: z.string().min(2, 'Designation is required'),
   authorizedPersonEmail: z.string().email('Invalid email'),
-  authorizedPersonPhone: z.string().regex(/^[6-9]\d{9}$/, 'Invalid phone (10 digits, starting with 6-9)'),
+  authorizedPersonPhone: z
+    .string()
+    .regex(/^[6-9]\d{9}$/, 'Invalid phone (10 digits, starting with 6-9)'),
   isMSE: z.boolean().default(false),
   isStartup: z.boolean().default(false),
   isLocalSupplier: z.boolean().default(false),
@@ -35,7 +42,7 @@ interface Step1Props {
   onNext: () => void;
 }
 
-export function Step1CompanyProfile({ applicationId, onSave, onNext }: Step1Props) {
+export function Step1CompanyProfile({ applicationId: _applicationId, onSave, onNext }: Step1Props) {
   const {
     register,
     handleSubmit,
@@ -67,17 +74,13 @@ export function Step1CompanyProfile({ applicationId, onSave, onNext }: Step1Prop
           <div className="space-y-2">
             <Label htmlFor="gstNumber">GST Number *</Label>
             <Input id="gstNumber" {...register('gstNumber')} placeholder="22AAAAA0000A1Z5" />
-            {errors.gstNumber && (
-              <p className="text-sm text-red-500">{errors.gstNumber.message}</p>
-            )}
+            {errors.gstNumber && <p className="text-sm text-red-500">{errors.gstNumber.message}</p>}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="panNumber">PAN Number *</Label>
             <Input id="panNumber" {...register('panNumber')} placeholder="AAAAA0000A" />
-            {errors.panNumber && (
-              <p className="text-sm text-red-500">{errors.panNumber.message}</p>
-            )}
+            {errors.panNumber && <p className="text-sm text-red-500">{errors.panNumber.message}</p>}
           </div>
 
           <div className="space-y-2">
@@ -169,7 +172,9 @@ export function Step1CompanyProfile({ applicationId, onSave, onNext }: Step1Prop
 
       {/* Category Declarations */}
       <div className="space-y-4">
-        <h3 className="font-semibold border-b pb-2">Category Declarations (for 15% discount eligibility)</h3>
+        <h3 className="font-semibold border-b pb-2">
+          Category Declarations (for 15% discount eligibility)
+        </h3>
 
         <div className="space-y-3">
           <label className="flex items-center gap-2">

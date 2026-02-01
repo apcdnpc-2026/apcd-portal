@@ -108,9 +108,7 @@ describe('AdminService', () => {
       const result = await service.getUsers(1, 10000);
 
       expect(result.pagination).toEqual({ page: 1, limit: 10000, total: 0, pages: 0 });
-      expect(prisma.user.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 10000 }),
-      );
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 10000 }));
     });
 
     it('should apply both role and search filters simultaneously', async () => {
@@ -141,7 +139,15 @@ describe('AdminService', () => {
     });
 
     it('should filter by every valid role value', async () => {
-      const roles = ['OEM', 'OFFICER', 'COMMITTEE', 'FIELD_VERIFIER', 'DEALING_HAND', 'ADMIN', 'SUPER_ADMIN'];
+      const roles = [
+        'OEM',
+        'OFFICER',
+        'COMMITTEE',
+        'FIELD_VERIFIER',
+        'DEALING_HAND',
+        'ADMIN',
+        'SUPER_ADMIN',
+      ];
       prisma.user.findMany.mockResolvedValue([]);
       prisma.user.count.mockResolvedValue(0);
 
@@ -279,7 +285,15 @@ describe('AdminService', () => {
     });
 
     it('should create users with each valid role', async () => {
-      const roles = ['OEM', 'OFFICER', 'COMMITTEE', 'FIELD_VERIFIER', 'DEALING_HAND', 'ADMIN', 'SUPER_ADMIN'];
+      const roles = [
+        'OEM',
+        'OFFICER',
+        'COMMITTEE',
+        'FIELD_VERIFIER',
+        'DEALING_HAND',
+        'ADMIN',
+        'SUPER_ADMIN',
+      ];
 
       for (const role of roles) {
         prisma.user.findUnique.mockResolvedValue(null);
@@ -605,24 +619,28 @@ describe('AdminService', () => {
   describe('getMisReport', () => {
     it('should return aggregated MIS report data', async () => {
       // Mock all groupBy calls with `as any` to avoid TS2615 circular type errors
+      // @ts-expect-error Prisma groupBy circular type
       prisma.application.groupBy.mockResolvedValue([
         { status: 'SUBMITTED', _count: 10 },
         { status: 'APPROVED', _count: 5 },
       ] as any);
+      // @ts-expect-error Prisma groupBy circular type
       prisma.payment.groupBy.mockResolvedValue([
         { status: 'VERIFIED', _count: 8, _sum: { totalAmount: 40000 } },
       ] as any);
-      prisma.certificate.groupBy.mockResolvedValue([
-        { status: 'ACTIVE', _count: 3 },
-      ] as any);
+      // @ts-expect-error Prisma groupBy circular type
+      prisma.certificate.groupBy.mockResolvedValue([{ status: 'ACTIVE', _count: 3 }] as any);
+      // @ts-expect-error Prisma groupBy circular type
       prisma.user.groupBy.mockResolvedValue([
         { role: 'OEM', _count: 20 },
         { role: 'OFFICER', _count: 5 },
       ] as any);
+      // @ts-expect-error Prisma groupBy circular type
       prisma.oemProfile.groupBy.mockResolvedValue([
         { state: 'Maharashtra', _count: 15 },
         { state: 'Delhi', _count: 10 },
       ] as any);
+      // @ts-expect-error Prisma groupBy circular type
       prisma.applicationApcd.groupBy.mockResolvedValue([
         { apcdTypeId: 'type-1', _count: 7 },
       ] as any);
@@ -646,9 +664,7 @@ describe('AdminService', () => {
       expect(result.usersByRole).toHaveProperty('OEM', 20);
       expect(result.usersByRole).toHaveProperty('OFFICER', 5);
       expect(result.stateWiseApplications).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ state: 'Maharashtra', count: 15 }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ state: 'Maharashtra', count: 15 })]),
       );
       expect(result.apcdTypeWiseApplications).toEqual([
         { category: 'Dust Collector', subType: 'Bag Filter', count: 7 },

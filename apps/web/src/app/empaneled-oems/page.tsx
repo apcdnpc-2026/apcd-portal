@@ -5,10 +5,10 @@ import { Award, Search, Building2, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { apiGet } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
@@ -52,7 +52,10 @@ export default function EmpaneledOemsPage() {
           </div>
           <div className="flex items-center gap-3">
             <Link href="/">
-              <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white hover:text-gov-blue">
+              <Button
+                variant="outline"
+                className="bg-transparent border-white text-white hover:bg-white hover:text-gov-blue"
+              >
                 Home
               </Button>
             </Link>
@@ -68,7 +71,8 @@ export default function EmpaneledOemsPage() {
           <div className="mb-8">
             <h2 className="text-3xl font-bold mb-2">Empaneled OEM Manufacturers</h2>
             <p className="text-muted-foreground">
-              List of manufacturers empaneled for Air Pollution Control Devices under CPCB guidelines
+              List of manufacturers empaneled for Air Pollution Control Devices under CPCB
+              guidelines
             </p>
           </div>
 
@@ -153,7 +157,9 @@ export default function EmpaneledOemsPage() {
       {/* Footer */}
       <footer className="bg-gray-800 text-white py-4">
         <div className="container mx-auto px-4 text-center text-sm">
-          <p>&copy; {new Date().getFullYear()} National Productivity Council. All rights reserved.</p>
+          <p>
+            &copy; {new Date().getFullYear()} National Productivity Council. All rights reserved.
+          </p>
           <p className="text-gray-400 mt-1">For CPCB - Central Pollution Control Board</p>
         </div>
       </footer>

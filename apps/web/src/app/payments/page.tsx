@@ -5,15 +5,10 @@ import { CreditCard } from 'lucide-react';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { apiGet } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { useAuthStore } from '@/store/auth-store';
 
 export default function PaymentsPage() {
-  const user = useAuthStore((s) => s.user);
-
-  const { data: response, isLoading } = useQuery({
+  const { isLoading } = useQuery({
     queryKey: ['my-payments'],
     queryFn: () => apiGet<any>('/payments/stats'),
   });
@@ -38,7 +33,9 @@ export default function PaymentsPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <CreditCard className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">Payment details are shown within each application</p>
+            <p className="text-muted-foreground">
+              Payment details are shown within each application
+            </p>
           </CardContent>
         </Card>
       </div>

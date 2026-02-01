@@ -4,8 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Award } from 'lucide-react';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { apiGet } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 

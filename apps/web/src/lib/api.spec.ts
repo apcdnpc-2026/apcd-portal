@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // vi.hoisted ensures these are available to the hoisted vi.mock factory
@@ -9,8 +9,6 @@ const {
   mockPost,
   mockPut,
   mockDelete,
-  mockRequestUse,
-  mockResponseUse,
   standalonePost,
   requestFulfilled,
   requestRejected,
@@ -250,10 +248,10 @@ describe('api module', () => {
 
       await responseRejected[0](error);
 
-      expect(standalonePost).toHaveBeenCalledWith(
-        expect.stringContaining('/api/auth/refresh'),
-        { refreshToken: 'old-refresh', userId: 'user-1' },
-      );
+      expect(standalonePost).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {
+        refreshToken: 'old-refresh',
+        userId: 'user-1',
+      });
     });
 
     it('stores new tokens in localStorage after successful refresh', async () => {
@@ -357,10 +355,10 @@ describe('api module', () => {
 
       await responseRejected[0](error);
 
-      expect(standalonePost).toHaveBeenCalledWith(
-        expect.stringContaining('/api/auth/refresh'),
-        { refreshToken: 'zustand-refresh', userId: 'zustand-user' },
-      );
+      expect(standalonePost).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {
+        refreshToken: 'zustand-refresh',
+        userId: 'zustand-user',
+      });
     });
 
     it('handles refresh response without nested data wrapper', async () => {
@@ -630,9 +628,7 @@ describe('api module', () => {
 
     it('returns 403 message', () => {
       const error = { response: { status: 403, data: {} } };
-      expect(getApiErrorMessage(error)).toBe(
-        'You do not have permission to perform this action.',
-      );
+      expect(getApiErrorMessage(error)).toBe('You do not have permission to perform this action.');
     });
 
     it('returns 404 message', () => {

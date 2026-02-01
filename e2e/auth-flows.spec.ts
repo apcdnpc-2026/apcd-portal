@@ -32,11 +32,13 @@ test.describe('Authentication Flows', () => {
   test('login page renders form with all expected elements', async ({ page }) => {
     await page.goto('/login');
 
-    await expect(page.getByRole('heading', { name: /login|sign in/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /welcome back|login|sign in/i })).toBeVisible();
     await expect(page.getByLabel(/email/i)).toBeVisible();
     await expect(page.getByLabel(/password/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /login|sign in/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /register|create account|sign up/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /register|create account|sign up/i }),
+    ).toBeVisible();
   });
 
   // ── Successful logins ──────────────────────────────────────────────────
@@ -48,9 +50,9 @@ test.describe('Authentication Flows', () => {
 
     await page.getByLabel(/email/i).fill(creds.email);
     await page.getByLabel(/password/i).fill(creds.password);
-    await page.getByRole('button', { name: /login|sign in/i }).click();
+    await page.getByRole('button', { name: /sign in/i }).click();
 
-    await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+    await page.waitForURL(/\/dashboard/, { timeout: 30000 });
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
 
@@ -94,7 +96,7 @@ test.describe('Authentication Flows', () => {
 
     await page.getByRole('button', { name: /create account/i }).click();
 
-    await page.waitForURL(/\/dashboard\/oem/, { timeout: 15000 });
+    await page.waitForURL(/\/dashboard\/oem/, { timeout: 30000 });
     await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible();
   });
 
@@ -106,10 +108,12 @@ test.describe('Authentication Flows', () => {
 
     await page.getByLabel(/email/i).fill('oem@testcompany.com');
     await page.getByLabel(/password/i).fill('TotallyWrong@999');
-    await page.getByRole('button', { name: /login|sign in/i }).click();
+    await page.getByRole('button', { name: /sign in/i }).click();
 
     await expect(
-      page.getByText(/invalid credentials|incorrect password|login failed|invalid email or password/i),
+      page
+        .getByText(/invalid credentials|incorrect password|login failed|invalid email or password/i)
+        .first(),
     ).toBeVisible({ timeout: 10000 });
 
     expect(page.url()).toContain('/login');
@@ -121,10 +125,14 @@ test.describe('Authentication Flows', () => {
 
     await page.getByLabel(/email/i).fill('doesnotexist-e2e@nowhere.com');
     await page.getByLabel(/password/i).fill('Whatever@123');
-    await page.getByRole('button', { name: /login|sign in/i }).click();
+    await page.getByRole('button', { name: /sign in/i }).click();
 
     await expect(
-      page.getByText(/invalid credentials|incorrect|not found|login failed|invalid email or password/i),
+      page
+        .getByText(
+          /invalid credentials|incorrect|not found|login failed|invalid email or password/i,
+        )
+        .first(),
     ).toBeVisible({ timeout: 10000 });
 
     expect(page.url()).toContain('/login');
@@ -134,7 +142,7 @@ test.describe('Authentication Flows', () => {
     await page.goto('/login');
     await page.waitForSelector('form');
 
-    await page.getByRole('button', { name: /login|sign in/i }).click();
+    await page.getByRole('button', { name: /sign in/i }).click();
 
     // Should show HTML5 validation or custom error - at minimum stay on login
     expect(page.url()).toContain('/login');
@@ -144,44 +152,30 @@ test.describe('Authentication Flows', () => {
 
   test('logout redirects to login page', async ({ page }) => {
     await loginAs(page, 'oem');
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await waitForLoad(page);
 
-    // Open user/profile menu
-    const userMenuButton = page.locator(
-      'button:has(svg), [aria-label*="menu" i], [aria-label*="user" i], [aria-label*="profile" i]',
-    );
-    if ((await userMenuButton.count()) > 0) {
-      await userMenuButton.last().click();
-    }
+    // Open the user dropdown menu in the header
+    const dropdownTrigger = page.locator('header button').last();
+    await dropdownTrigger.click();
 
-    // Click logout (button, link, or menu-item)
-    const logoutButton = page.getByRole('button', { name: /logout|sign out/i });
-    const logoutLink = page.getByRole('link', { name: /logout|sign out/i });
-    const logoutMenuItem = page.getByRole('menuitem', { name: /logout|sign out/i });
+    // Click the Logout menu item
+    await page.getByRole('menuitem', { name: /logout/i }).click();
 
-    if (await logoutButton.isVisible().catch(() => false)) {
-      await logoutButton.click();
-    } else if (await logoutLink.isVisible().catch(() => false)) {
-      await logoutLink.click();
-    } else if (await logoutMenuItem.isVisible().catch(() => false)) {
-      await logoutMenuItem.click();
-    }
-
-    await page.waitForURL(/\/login/, { timeout: 10000 });
-    await expect(page.getByRole('heading', { name: /login|sign in/i })).toBeVisible();
+    await page.waitForURL(/\/login/, { timeout: 30000 });
+    await expect(page.getByRole('heading', { name: /welcome back|login|sign in/i })).toBeVisible();
   });
 
   // ── Session persistence ────────────────────────────────────────────────
 
   test('session persists after page refresh', async ({ page }) => {
     await loginAs(page, 'oem');
-    await page.waitForURL(/\/dashboard/, { timeout: 10000 });
+    await page.waitForURL(/\/dashboard/, { timeout: 30000 });
 
     await page.reload();
     await waitForLoad(page);
 
     expect(page.url()).toContain('/dashboard');
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible();
   });
 
   // ── Protected routes ───────────────────────────────────────────────────
@@ -190,19 +184,19 @@ test.describe('Authentication Flows', () => {
     await page.goto('/applications');
 
     // Should redirect to login
-    await page.waitForURL(/\/login/, { timeout: 10000 });
-    await expect(page.getByRole('heading', { name: /login|sign in/i })).toBeVisible();
+    await page.waitForURL(/\/login/, { timeout: 30000 });
+    await expect(page.getByRole('heading', { name: /welcome back|login|sign in/i })).toBeVisible();
   });
 
   test('unauthenticated access to /verification redirects to /login', async ({ page }) => {
     await page.goto('/verification');
 
-    await page.waitForURL(/\/login/, { timeout: 10000 });
+    await page.waitForURL(/\/login/, { timeout: 30000 });
   });
 
   test('unauthenticated access to /admin/users redirects to /login', async ({ page }) => {
     await page.goto('/admin/users');
 
-    await page.waitForURL(/\/login/, { timeout: 10000 });
+    await page.waitForURL(/\/login/, { timeout: 30000 });
   });
 });

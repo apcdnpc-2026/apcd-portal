@@ -121,7 +121,7 @@ export default function NewApplicationPage() {
     }
   };
 
-  const StepComponent = STEPS[currentStep - 1].component;
+  const StepComponent = STEPS[currentStep - 1]!.component;
 
   if (checkingProfile || (!hasProfile && !profileResponse)) {
     return (
@@ -197,7 +197,7 @@ export default function NewApplicationPage() {
             {/* Mobile compact step indicator */}
             <div className="flex sm:hidden items-center justify-between">
               <span className="text-sm font-medium text-primary">
-                Step {currentStep} of {STEPS.length}: {STEPS[currentStep - 1].title}
+                Step {currentStep} of {STEPS.length}: {STEPS[currentStep - 1]!.title}
               </span>
               <span className="text-xs text-muted-foreground">
                 {Math.round((currentStep / STEPS.length) * 100)}%
@@ -266,7 +266,7 @@ export default function NewApplicationPage() {
           <Card>
             <CardHeader>
               <CardTitle>
-                Step {currentStep}: {STEPS[currentStep - 1].title}
+                Step {currentStep}: {STEPS[currentStep - 1]!.title}
               </CardTitle>
             </CardHeader>
             <CardContent>

@@ -315,7 +315,7 @@ export default function CheckEligibilityPage() {
       ring: 'text-red-500',
     },
   };
-  const colors = colorMap[resultColor];
+  const colors = colorMap[resultColor]!;
 
   return (
     <div className="min-h-screen flex flex-col">

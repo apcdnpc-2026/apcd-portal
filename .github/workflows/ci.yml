@@ -219,8 +219,38 @@ jobs:
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/apcd_e2e
 
+      - name: Build API
+        run: pnpm --filter @apcd/api build
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/apcd_e2e
+
+      - name: Build Web
+        run: pnpm --filter @apcd/web build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+
+      - name: Start API server
+        run: |
+          cd apps/api && node dist/main.js &
+          sleep 5
+          curl -sf http://localhost:4000/api/health || echo "API health check warning"
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/apcd_e2e
+          JWT_SECRET: test-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+          PORT: 4000
+          NODE_ENV: test
+
+      - name: Start Web server
+        run: |
+          cd apps/web && npx next start -p 3000 &
+          sleep 5
+          curl -sf http://localhost:3000 || echo "Web health check warning"
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
 
       - name: Run E2E tests
         run: pnpm test:e2e
@@ -229,6 +259,12 @@ jobs:
           JWT_SECRET: test-secret
           JWT_REFRESH_SECRET: test-refresh-secret
           E2E_BASE_URL: http://localhost:3000
+
+      - name: Run role integration tests
+        if: always()
+        run: pnpm test:roles
+        env:
+          API_URL: http://localhost:4000
 
       - name: Upload Playwright report
         if: always()

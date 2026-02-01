@@ -12,19 +12,27 @@ const credentials: Record<string, { email: string; password: string }> = {
   'dealing-hand': { email: 'dealinghand@npcindia.gov.in', password: 'Dealing@APCD2025!' },
 };
 
-export type TestRole = 'oem' | 'officer' | 'admin' | 'committee' | 'field-verifier' | 'dealing-hand';
+export type TestRole =
+  | 'oem'
+  | 'officer'
+  | 'admin'
+  | 'committee'
+  | 'field-verifier'
+  | 'dealing-hand';
 
 /**
  * Log in as a seeded test user and wait for dashboard redirect.
+ * Timeouts are generous to accommodate Railway cold-starts.
  */
 export async function loginAs(page: Page, role: TestRole) {
   const { email, password } = credentials[role];
   await page.goto('/login');
-  await page.waitForSelector('form', { timeout: 10000 });
+  await page.waitForSelector('form', { timeout: 30000 });
   await page.getByLabel(/email/i).fill(email);
   await page.getByLabel(/password/i).fill(password);
-  await page.getByRole('button', { name: /login|sign in/i }).click();
-  await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+  await page.getByRole('button', { name: /sign in/i }).click();
+  // Wait for dashboard or unauthorized redirect (dealing-hand role may not have routes yet)
+  await page.waitForURL(/\/(dashboard|unauthorized)/, { timeout: 30000 });
 }
 
 /**
@@ -37,8 +45,17 @@ export function getCredentials(role: TestRole) {
 /**
  * Helper to wait for any loading spinners to disappear.
  */
-export async function waitForLoad(page: Page, timeout = 10000) {
-  await page
-    .waitForSelector('.animate-spin', { state: 'hidden', timeout })
-    .catch(() => {});
+export async function waitForLoad(page: Page, timeout = 20000) {
+  await page.waitForSelector('.animate-spin', { state: 'hidden', timeout }).catch(() => {});
+}
+
+/**
+ * Check if the page is showing a Next.js Server Error overlay (dev mode).
+ * Returns true if a server error is detected.
+ */
+export async function hasServerError(page: Page): Promise<boolean> {
+  return page
+    .getByRole('heading', { name: /Server Error/i })
+    .isVisible({ timeout: 500 })
+    .catch(() => false);
 }

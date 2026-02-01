@@ -5,9 +5,8 @@ import { MapPin, Calendar } from 'lucide-react';
 import Link from 'next/link';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { apiGet } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
@@ -50,7 +49,9 @@ export default function FieldVerificationAssignmentsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">{a.application?.oemProfile?.companyName}</p>
-                      <p className="text-sm text-muted-foreground">{a.application?.oemProfile?.fullAddress}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {a.application?.oemProfile?.fullAddress}
+                      </p>
                       {a.scheduledDate && (
                         <div className="flex items-center gap-1 mt-1 text-sm">
                           <Calendar className="h-3 w-3" />

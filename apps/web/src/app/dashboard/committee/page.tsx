@@ -5,11 +5,10 @@ import { ClipboardCheck, FileText, Star, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiGet } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
 
 export default function CommitteeDashboard() {
   const { data: dashboard, isLoading } = useQuery({
@@ -67,7 +66,8 @@ export default function CommitteeDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-900">
-                {dashboard?.applicationsForReview?.filter((a: any) => !a.hasMyEvaluation).length || 0}
+                {dashboard?.applicationsForReview?.filter((a: any) => !a.hasMyEvaluation).length ||
+                  0}
               </div>
               <p className="text-xs text-blue-700">Not yet evaluated by you</p>
             </CardContent>
@@ -103,9 +103,7 @@ export default function CommitteeDashboard() {
                   >
                     <div className="flex-1">
                       <p className="font-medium">{app.applicationNumber}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {app.oemProfile?.companyName}
-                      </p>
+                      <p className="text-sm text-muted-foreground">{app.oemProfile?.companyName}</p>
                     </div>
                     <div className="flex items-center gap-4">
                       {app.hasMyEvaluation ? (

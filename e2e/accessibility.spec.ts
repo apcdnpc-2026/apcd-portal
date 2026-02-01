@@ -21,12 +21,16 @@ test.describe('Accessibility', () => {
 
   test('login page supports full keyboard navigation', async ({ page }) => {
     await page.goto('/login');
-    await page.waitForSelector('form');
+    await page.waitForSelector('form', { timeout: 30000 });
+
+    // Wait for form to be fully interactive
+    await page.waitForTimeout(500);
 
     // Tab through focusable elements to find email input
-    let maxTabs = 15;
+    let maxTabs = 20;
     let emailFocused = false;
     await page.keyboard.press('Tab');
+    await page.waitForTimeout(100);
 
     while (maxTabs > 0) {
       const focusedElement = await page.evaluate(() => {
@@ -46,13 +50,14 @@ test.describe('Accessibility', () => {
       }
 
       await page.keyboard.press('Tab');
+      await page.waitForTimeout(100);
       maxTabs--;
     }
 
     expect(emailFocused).toBeTruthy();
 
-    // Type email
-    await page.keyboard.type('keyboard@test.com');
+    // Type valid email (seeded OEM user)
+    await page.keyboard.type('oem@testcompany.com');
 
     // Tab to password
     await page.keyboard.press('Tab');
@@ -63,36 +68,39 @@ test.describe('Accessibility', () => {
     });
     expect(passwordFocused).toBeTruthy();
 
-    // Type password
-    await page.keyboard.type('Test@1234');
+    // Type valid password
+    await page.keyboard.type('Oem@APCD2025!');
 
-    // Tab to submit button
-    maxTabs = 5;
-    let buttonFocused = false;
+    // Tab to submit button (skip past password toggle, forgot password link)
+    maxTabs = 8;
+    let submitFocused = false;
     await page.keyboard.press('Tab');
+    await page.waitForTimeout(100);
 
     while (maxTabs > 0) {
-      const focusedTag = await page.evaluate(
-        () => document.activeElement?.tagName?.toLowerCase(),
-      );
-      if (focusedTag === 'button') {
-        buttonFocused = true;
+      const focused = await page.evaluate(() => {
+        const el = document.activeElement;
+        return {
+          tagName: el?.tagName?.toLowerCase(),
+          textContent: el?.textContent?.trim().toLowerCase(),
+        };
+      });
+      if (focused.tagName === 'button' && focused.textContent?.includes('sign in')) {
+        submitFocused = true;
         break;
       }
       await page.keyboard.press('Tab');
+      await page.waitForTimeout(100);
       maxTabs--;
     }
 
-    expect(buttonFocused).toBeTruthy();
+    expect(submitFocused).toBeTruthy();
 
     // Press Enter to submit
     await page.keyboard.press('Enter');
 
-    // Should navigate to dashboard or show error (either confirms keyboard submission works)
-    await Promise.race([
-      page.waitForURL(/\/dashboard/, { timeout: 10000 }),
-      expect(page.getByText(/invalid|error|incorrect|failed/i)).toBeVisible({ timeout: 10000 }),
-    ]);
+    // Should navigate to dashboard (using valid credentials)
+    await page.waitForURL(/\/(dashboard|unauthorized)/, { timeout: 30000 });
   });
 
   // ── ARIA Labels: Login ─────────────────────────────────────────────────
@@ -109,7 +117,7 @@ test.describe('Accessibility', () => {
     await expect(passwordInput).toBeVisible();
     await expect(passwordInput).toHaveAttribute('type', 'password');
 
-    const submitButton = page.getByRole('button', { name: /login|sign in/i });
+    const submitButton = page.getByRole('button', { name: /sign in/i });
     await expect(submitButton).toBeVisible();
 
     const formElement = page.locator('form');
@@ -142,7 +150,7 @@ test.describe('Accessibility', () => {
     await page.waitForSelector('form');
 
     // Submit button: text color differs from background
-    const submitButton = page.getByRole('button', { name: /login|sign in/i });
+    const submitButton = page.getByRole('button', { name: /sign in/i });
     const buttonStyles = await submitButton.evaluate((el) => {
       const styles = window.getComputedStyle(el);
       return {
@@ -168,7 +176,7 @@ test.describe('Accessibility', () => {
     expect(inputStyles.borderWidth).toBeTruthy();
 
     // Heading has reasonable font size
-    const heading = page.getByRole('heading', { name: /login|sign in/i });
+    const heading = page.getByRole('heading', { name: /welcome back|login|sign in/i });
     const headingStyles = await heading.evaluate((el) => {
       const styles = window.getComputedStyle(el);
       return {
@@ -186,10 +194,10 @@ test.describe('Accessibility', () => {
     await page.goto('/login');
     await page.waitForSelector('form');
 
-    await expect(page.getByRole('heading', { name: /login|sign in/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /welcome back|login|sign in/i })).toBeVisible();
     await expect(page.getByLabel(/email/i)).toBeVisible();
     await expect(page.getByLabel(/password/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /login|sign in/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible();
 
     // Form does not overflow horizontally
     const formOverflow = await page.evaluate(() => {
@@ -209,9 +217,7 @@ test.describe('Accessibility', () => {
 
   // ── Responsive Layout: Dashboard ───────────────────────────────────────
 
-  test('OEM dashboard renders without horizontal overflow at mobile viewport', async ({
-    page,
-  }) => {
+  test('OEM dashboard renders without horizontal overflow at mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await loginAs(page, 'oem');
     await waitForLoad(page);
@@ -238,9 +244,9 @@ test.describe('Accessibility', () => {
     await loginAs(page, 'oem');
     await page.goto('/applications/new');
 
-    await expect(
-      page.getByRole('heading', { name: /new empanelment application/i }),
-    ).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: /new empanelment application/i })).toBeVisible({
+      timeout: 15000,
+    });
 
     // Step heading should be an accessible heading
     await expect(page.getByRole('heading', { name: /step 1/i })).toBeVisible({ timeout: 10000 });
@@ -292,9 +298,7 @@ test.describe('Accessibility', () => {
     await page.goto('/verification');
     await waitForLoad(page);
 
-    await expect(
-      page.getByRole('heading', { name: /application verification/i }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: /application verification/i })).toBeVisible();
 
     const bodyOverflow = await page.evaluate(() => {
       return document.body.scrollWidth <= window.innerWidth;

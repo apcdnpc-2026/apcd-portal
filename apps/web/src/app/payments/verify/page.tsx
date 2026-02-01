@@ -4,9 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CreditCard, CheckCircle, XCircle } from 'lucide-react';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { apiGet, apiPut } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 

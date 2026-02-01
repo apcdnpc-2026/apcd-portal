@@ -30,6 +30,9 @@ Thumbs.db
 # Prisma
 packages/database/prisma/migrations/**/migration_lock.toml
 
+# Uploaded files (local storage)
+apps/api/uploads/
+
 # Docker volumes
 docker/data/
 

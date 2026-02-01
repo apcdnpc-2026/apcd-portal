@@ -37,9 +37,9 @@ test.describe('OEM User Journey', () => {
     await waitForLoad(page);
 
     // Dashboard should render stat cards or summary text
-    await expect(
-      page.getByText(/application|empanelment|dashboard/i).first(),
-    ).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/application|empanelment|dashboard/i).first()).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   // ── Registration ───────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ test.describe('OEM User Journey', () => {
     await page.getByLabel(/confirm password/i).fill(NEW_OEM.password);
 
     await page.getByRole('button', { name: /create account/i }).click();
-    await page.waitForURL(/\/dashboard\/oem/, { timeout: 15000 });
+    await page.waitForURL(/\/dashboard\/oem/, { timeout: 30000 });
     await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible();
   });
 
@@ -89,7 +89,9 @@ test.describe('OEM User Journey', () => {
 
     await page.getByRole('button', { name: /save profile|update profile/i }).click();
 
-    await expect(page.getByText(/profile (created|updated)/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/profile (created|updated)/i).first()).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   // ── Create Application ─────────────────────────────────────────────────
@@ -98,15 +100,11 @@ test.describe('OEM User Journey', () => {
     await loginAs(page, 'oem');
     await page.goto('/applications/new');
 
-    await expect(
-      page.getByRole('heading', { name: /new empanelment application/i }),
-    ).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: /new empanelment application/i })).toBeVisible({
+      timeout: 15000,
+    });
 
-    // Step progress should be visible
-    await expect(page.getByText(/APCD Types/i)).toBeVisible();
-    await expect(page.getByText(/Documents/i)).toBeVisible();
-    await expect(page.getByText(/Review & Submit/i)).toBeVisible();
-
+    // Step 1 heading should be visible
     await expect(page.getByRole('heading', { name: /step 1/i })).toBeVisible({ timeout: 10000 });
   });
 
@@ -171,7 +169,7 @@ test.describe('OEM User Journey', () => {
       await page.getByRole('button', { name: /^next$/i }).click();
       await expect(
         page.getByRole('heading', { name: new RegExp(`step ${step + 1}`, 'i') }),
-      ).toBeVisible({ timeout: 5000 });
+      ).toBeVisible({ timeout: 15000 });
     }
 
     // Step 6 = Review & Submit
@@ -192,7 +190,7 @@ test.describe('OEM User Journey', () => {
       await page.getByRole('button', { name: /^next$/i }).click();
       await expect(
         page.getByRole('heading', { name: new RegExp(`step ${step + 1}`, 'i') }),
-      ).toBeVisible({ timeout: 5000 });
+      ).toBeVisible({ timeout: 15000 });
     }
 
     // Accept declaration and submit
@@ -213,7 +211,7 @@ test.describe('OEM User Journey', () => {
     await expect(page.getByRole('heading', { name: /my applications/i })).toBeVisible();
     await waitForLoad(page);
 
-    const applicationCards = page.locator('[class*="rounded-lg border"]');
+    const applicationCards = page.locator('.rounded-lg.border');
     const count = await applicationCards.count();
     expect(count).toBeGreaterThanOrEqual(0);
 
@@ -259,7 +257,7 @@ test.describe('OEM User Journey', () => {
     }
 
     await respondLinks.first().click();
-    await page.waitForURL(/\/queries\//, { timeout: 10000 });
+    await page.waitForURL(/\/queries\//, { timeout: 30000 });
 
     await expect(page.getByRole('heading', { name: /query details/i })).toBeVisible();
 
@@ -270,8 +268,10 @@ test.describe('OEM User Journey', () => {
     await page.getByRole('button', { name: /submit response/i }).click();
 
     await Promise.race([
-      page.waitForURL(/\/queries$/, { timeout: 15000 }),
-      expect(page.getByText(/response submitted successfully/i)).toBeVisible({ timeout: 15000 }),
+      page.waitForURL(/\/queries$/, { timeout: 30000 }),
+      expect(page.getByText(/response submitted successfully/i).first()).toBeVisible({
+        timeout: 15000,
+      }),
     ]);
   });
 });

@@ -1,23 +1,15 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import {
-  FileText,
-  CreditCard,
-  MapPin,
-  ClipboardCheck,
-  Users,
-  Clock,
-  ArrowRight,
-} from 'lucide-react';
+import { FileText, CreditCard, MapPin, ClipboardCheck, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiGet } from '@/lib/api';
-import { formatDate, formatCurrency, getStatusColor, getStatusLabel } from '@/lib/utils';
+import { formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 
 export default function OfficerDashboard() {
   const { data: dashboard, isLoading } = useQuery({
@@ -48,7 +40,9 @@ export default function OfficerDashboard() {
         <div className="grid gap-4 md:grid-cols-3">
           <Card className="bg-blue-50 border-blue-200">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-blue-800">Today's New Applications</CardTitle>
+              <CardTitle className="text-sm font-medium text-blue-800">
+                Today's New Applications
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-blue-900">
@@ -59,7 +53,9 @@ export default function OfficerDashboard() {
 
           <Card className="bg-green-50 border-green-200">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-green-800">Today's Submissions</CardTitle>
+              <CardTitle className="text-sm font-medium text-green-800">
+                Today's Submissions
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-green-900">
@@ -70,7 +66,9 @@ export default function OfficerDashboard() {
 
           <Card className="bg-purple-50 border-purple-200">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-purple-800">Today's Payments</CardTitle>
+              <CardTitle className="text-sm font-medium text-purple-800">
+                Today's Payments
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-purple-900">

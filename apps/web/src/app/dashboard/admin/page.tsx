@@ -1,24 +1,15 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import {
-  FileText,
-  CreditCard,
-  Award,
-  Users,
-  HardDrive,
-  TrendingUp,
-  Settings,
-  BarChart3,
-} from 'lucide-react';
+import { FileText, CreditCard, Award, Users, Settings, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiGet } from '@/lib/api';
-import { formatCurrency, getStatusLabel, getStatusColor } from '@/lib/utils';
+import { formatCurrency, getStatusColor } from '@/lib/utils';
 
 export default function AdminDashboard() {
   const { data: dashboard, isLoading } = useQuery({
@@ -179,15 +170,17 @@ export default function AdminDashboard() {
               <CardDescription>Overview of all certificates</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {Object.entries(dashboard?.certificateStats?.byStatus || {}).map(([status, count]) => (
-                <div
-                  key={status}
-                  className="flex items-center justify-between p-3 rounded-lg border"
-                >
-                  <Badge className={getStatusColor(status)}>{status}</Badge>
-                  <span className="font-bold">{String(count)}</span>
-                </div>
-              ))}
+              {Object.entries(dashboard?.certificateStats?.byStatus || {}).map(
+                ([status, count]) => (
+                  <div
+                    key={status}
+                    className="flex items-center justify-between p-3 rounded-lg border"
+                  >
+                    <Badge className={getStatusColor(status)}>{status}</Badge>
+                    <span className="font-bold">{String(count)}</span>
+                  </div>
+                ),
+              )}
             </CardContent>
           </Card>
         </div>

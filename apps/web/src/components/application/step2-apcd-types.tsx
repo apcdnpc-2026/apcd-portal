@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
+import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,7 +15,7 @@ interface Step2Props {
   onNext: () => void;
 }
 
-export function Step2ApcdTypes({ applicationId, onSave, onNext }: Step2Props) {
+export function Step2ApcdTypes({ applicationId: _applicationId, onSave, onNext }: Step2Props) {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
   const { data: response, isLoading } = useQuery({
@@ -26,7 +26,7 @@ export function Step2ApcdTypes({ applicationId, onSave, onNext }: Step2Props) {
 
   const toggleType = (typeId: string) => {
     setSelectedTypes((prev) =>
-      prev.includes(typeId) ? prev.filter((id) => id !== typeId) : [...prev, typeId]
+      prev.includes(typeId) ? prev.filter((id) => id !== typeId) : [...prev, typeId],
     );
   };
 
@@ -53,8 +53,8 @@ export function Step2ApcdTypes({ applicationId, onSave, onNext }: Step2Props) {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="font-medium text-blue-800">Select APCD Types for Empanelment</h3>
         <p className="text-sm text-blue-700 mt-1">
-          Choose the Air Pollution Control Device types you want to get empaneled for.
-          Empanelment fee: ₹65,000 per APCD type (+ 18% GST).
+          Choose the Air Pollution Control Device types you want to get empaneled for. Empanelment
+          fee: ₹65,000 per APCD type (+ 18% GST).
         </p>
       </div>
 
@@ -75,7 +75,7 @@ export function Step2ApcdTypes({ applicationId, onSave, onNext }: Step2Props) {
                       'cursor-pointer transition-all',
                       isSelected
                         ? 'border-primary bg-primary/5 ring-2 ring-primary'
-                        : 'hover:border-primary/50'
+                        : 'hover:border-primary/50',
                     )}
                     onClick={() => toggleType(type.id)}
                   >
@@ -84,17 +84,13 @@ export function Step2ApcdTypes({ applicationId, onSave, onNext }: Step2Props) {
                         <div>
                           <p className="font-medium">{type.name}</p>
                           {type.description && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {type.description}
-                            </p>
+                            <p className="text-sm text-muted-foreground mt-1">{type.description}</p>
                           )}
                         </div>
                         <div
                           className={cn(
                             'h-5 w-5 rounded-full border flex items-center justify-center',
-                            isSelected
-                              ? 'bg-primary border-primary'
-                              : 'border-muted-foreground'
+                            isSelected ? 'bg-primary border-primary' : 'border-muted-foreground',
                           )}
                         >
                           {isSelected && <Check className="h-3 w-3 text-white" />}
@@ -115,7 +111,8 @@ export function Step2ApcdTypes({ applicationId, onSave, onNext }: Step2Props) {
           <div>
             <p className="font-medium">Selected APCD Types: {selectedTypes.length}</p>
             <p className="text-sm text-muted-foreground">
-              Estimated Empanelment Fee: ₹{(selectedTypes.length * 65000 * 1.18).toLocaleString('en-IN')}
+              Estimated Empanelment Fee: ₹
+              {(selectedTypes.length * 65000 * 1.18).toLocaleString('en-IN')}
               (including GST)
             </p>
           </div>
@@ -126,9 +123,7 @@ export function Step2ApcdTypes({ applicationId, onSave, onNext }: Step2Props) {
         <Button variant="outline" onClick={onNext}>
           Skip for now
         </Button>
-        <Button onClick={handleSubmit}>
-          Save & Continue
-        </Button>
+        <Button onClick={handleSubmit}>Save & Continue</Button>
       </div>
     </div>
   );

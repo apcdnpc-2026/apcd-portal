@@ -59,10 +59,7 @@ describe('AuditLogService', () => {
     const mockPrisma = mockDeep<PrismaClient>();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AuditLogService,
-        { provide: PrismaService, useValue: mockPrisma },
-      ],
+      providers: [AuditLogService, { provide: PrismaService, useValue: mockPrisma }],
     }).compile();
 
     service = module.get<AuditLogService>(AuditLogService);
@@ -506,6 +503,7 @@ describe('AuditLogService', () => {
   describe('getRecentActivitySummary', () => {
     it('should return summary of last 24 hours activity', async () => {
       prisma.auditLog.count.mockResolvedValue(42);
+      // @ts-expect-error Prisma groupBy circular type
       (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([
         { userId: 'user-1' },
         { userId: 'user-2' },
@@ -559,9 +557,7 @@ describe('AuditLogService', () => {
 
     it('should handle single user with single action', async () => {
       prisma.auditLog.count.mockResolvedValue(1);
-      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([
-        { userId: 'user-1' },
-      ] as any);
+      (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([{ userId: 'user-1' }] as any);
       (prisma.auditLog.groupBy as jest.Mock).mockResolvedValueOnce([
         { action: 'LOGIN', _count: 1 },
       ] as any);

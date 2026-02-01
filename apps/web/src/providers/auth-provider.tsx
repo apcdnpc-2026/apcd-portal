@@ -45,6 +45,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
   ],
   COMMITTEE: ['/dashboard/committee', '/committee', '/profile'],
   FIELD_VERIFIER: ['/dashboard/field-verifier', '/field-verification', '/profile'],
+  DEALING_HAND: ['/dashboard/dealing-hand', '/dealing-hand', '/profile'],
 };
 
 function isPublicRoute(pathname: string | null): boolean {
@@ -61,6 +62,7 @@ function getDashboardRoute(role: string): string {
     SUPER_ADMIN: '/dashboard/admin',
     COMMITTEE: '/dashboard/committee',
     FIELD_VERIFIER: '/dashboard/field-verifier',
+    DEALING_HAND: '/dashboard/dealing-hand',
   };
   return routes[role] || '/dashboard';
 }

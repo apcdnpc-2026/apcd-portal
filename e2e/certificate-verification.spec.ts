@@ -22,9 +22,9 @@ test.describe('Certificate Verification', () => {
     expect(page.url()).toContain('/check-eligibility');
 
     // Page should have heading and form elements
-    await expect(
-      page.getByRole('heading', { name: /eligibility|check eligibility/i }),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: /eligibility|check eligibility/i })).toBeVisible(
+      { timeout: 10000 },
+    );
 
     // Should have form fields for eligibility check
     await expect(page.locator('form, [class*="card"]').first()).toBeVisible();
@@ -33,9 +33,9 @@ test.describe('Certificate Verification', () => {
   test('eligibility check wizard can be navigated', async ({ page }) => {
     await page.goto('/check-eligibility');
 
-    await expect(
-      page.getByRole('heading', { name: /eligibility|check eligibility/i }),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: /eligibility|check eligibility/i })).toBeVisible(
+      { timeout: 10000 },
+    );
 
     // Look for Next/Continue button to advance through the wizard
     const nextBtn = page.getByRole('button', { name: /next|continue|check/i });
@@ -62,22 +62,21 @@ test.describe('Certificate Verification', () => {
 
     await expect(
       page.getByRole('heading', {
-        name: /empaneled OEMs|empaneled manufacturers|approved OEMs/i,
+        name: /empaneled OEM|empaneled manufacturers|approved OEMs/i,
       }),
     ).toBeVisible({ timeout: 10000 });
     await waitForLoad(page);
 
-    const oemCards = page.locator('[class*="rounded-lg border"], tbody tr');
-    const emptyMessage = page.getByText(/no empaneled|no OEMs|no results/i);
-    const oemCount = await oemCards.count();
+    // Page shows empaneled OEMs or a count summary
+    const countText = page.getByText(/\d+ empaneled manufacturer/i);
+    const oemHeadings = page.getByRole('heading', { level: 3 });
+    const emptyMessage = page.getByText(/no empaneled|no OEMs|no results|0 empaneled/i);
 
-    if (oemCount > 0) {
-      await expect(page.locator('.font-medium, td').first()).toBeVisible();
-      await expect(
-        page.getByText(/(APCD|category|type|manufacturer)/i).first(),
-      ).toBeVisible({ timeout: 5000 });
+    const headingCount = await oemHeadings.count();
+    if (headingCount > 0) {
+      await expect(oemHeadings.first()).toBeVisible();
     } else {
-      await expect(emptyMessage).toBeVisible();
+      await expect(emptyMessage.or(countText)).toBeVisible();
     }
   });
 
@@ -108,26 +107,20 @@ test.describe('Certificate Verification', () => {
       }),
     ).toBeVisible();
 
-    const certificateCards = page.locator('[class*="rounded-lg border"]');
+    // Check for certificate content or empty state
+    const certText = page.getByText(/APCD-CERT/i);
     const emptyMessage = page.getByText(/no certificates|no empanelment certificates/i);
-    const cardCount = await certificateCards.count();
+    const certCount = await certText.count();
 
-    if (cardCount > 0) {
-      await expect(
-        page.getByText(/(certificate|empanelment|APCD)/i).first(),
-      ).toBeVisible({ timeout: 5000 });
+    if (certCount > 0) {
+      await expect(certText.first()).toBeVisible({ timeout: 5000 });
 
-      await expect(
-        page.getByText(/(valid|active|expired|issued|validity)/i).first(),
-      ).toBeVisible({ timeout: 5000 });
+      await expect(page.getByText(/(active|expired|issued|valid until)/i).first()).toBeVisible({
+        timeout: 5000,
+      });
 
-      // Download or view button should exist
-      await expect(
-        page
-          .getByRole('button', { name: /download|view|print/i })
-          .first()
-          .or(page.getByRole('link', { name: /download|view|print/i }).first()),
-      ).toBeVisible();
+      // Download button should exist
+      await expect(page.getByRole('button', { name: /download/i }).first()).toBeVisible();
     } else {
       await expect(emptyMessage).toBeVisible();
     }
@@ -139,9 +132,9 @@ test.describe('Certificate Verification', () => {
     await loginAs(page, 'admin');
     await page.goto('/admin/certificates');
 
-    await expect(
-      page.getByRole('heading', { name: /certificate|certificates/i }),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: /certificate|certificates/i })).toBeVisible({
+      timeout: 10000,
+    });
     await waitForLoad(page);
   });
 });

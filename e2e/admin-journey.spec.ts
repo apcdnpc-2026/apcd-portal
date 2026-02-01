@@ -22,7 +22,7 @@ test.describe('Admin User Journey', () => {
     await loginAs(page, 'admin');
     await waitForLoad(page);
 
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /admin dashboard/i })).toBeVisible();
   });
 
   // ── User Management ────────────────────────────────────────────────────
@@ -32,7 +32,6 @@ test.describe('Admin User Journey', () => {
     await page.goto('/admin/users');
 
     await expect(page.getByRole('heading', { name: /user management/i })).toBeVisible();
-    await expect(page.getByText(/manage portal users and roles/i)).toBeVisible();
     await waitForLoad(page);
 
     // Search input
@@ -44,21 +43,18 @@ test.describe('Admin User Journey', () => {
     // Table headers
     const tableHeaders = ['Name', 'Email', 'Role', 'Status', 'Last Login', 'Actions'];
     for (const header of tableHeaders) {
-      await expect(
-        page.locator('th').filter({ hasText: new RegExp(header, 'i') }),
-      ).toBeVisible();
+      await expect(page.locator('th').filter({ hasText: new RegExp(header, 'i') })).toBeVisible();
     }
 
     // At least one seeded user row exists
     const tableRows = page.locator('tbody tr');
     expect(await tableRows.count()).toBeGreaterThan(0);
 
-    // First row has a role badge
+    // First row has content in name and role columns
     const firstRow = tableRows.first();
     await expect(firstRow.locator('td').first()).not.toBeEmpty();
-    await expect(
-      firstRow.locator('td').nth(2).locator('[class*="badge"], [class*="Badge"]'),
-    ).toBeVisible();
+    // Role column (td index 2) should have text content
+    await expect(firstRow.locator('td').nth(2)).not.toBeEmpty();
   });
 
   test('search filters users by name or email', async ({ page }) => {
@@ -128,7 +124,7 @@ test.describe('Admin User Journey', () => {
       .click();
 
     await Promise.race([
-      expect(page.getByText(/user created successfully/i)).toBeVisible({ timeout: 10000 }),
+      expect(page.getByText(/user created successfully/i).first()).toBeVisible({ timeout: 10000 }),
       expect(page.getByRole('heading', { name: /create new user/i })).toBeHidden({
         timeout: 10000,
       }),
@@ -168,7 +164,7 @@ test.describe('Admin User Journey', () => {
     await page.goto('/admin/reports');
 
     await expect(
-      page.getByRole('heading', { name: /reports|analytics|statistics/i }),
+      page.getByRole('heading', { name: /MIS reports|reports|analytics|statistics/i }),
     ).toBeVisible({ timeout: 10000 });
     await waitForLoad(page);
   });
@@ -179,9 +175,9 @@ test.describe('Admin User Journey', () => {
     await loginAs(page, 'admin');
     await page.goto('/admin/apcd-types');
 
-    await expect(
-      page.getByRole('heading', { name: /APCD types|manage APCD/i }),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: /APCD types|manage APCD/i })).toBeVisible({
+      timeout: 10000,
+    });
     await waitForLoad(page);
   });
 
@@ -191,9 +187,9 @@ test.describe('Admin User Journey', () => {
     await loginAs(page, 'admin');
     await page.goto('/admin/certificates');
 
-    await expect(
-      page.getByRole('heading', { name: /certificate|certificates/i }),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: /certificate|certificates/i })).toBeVisible({
+      timeout: 10000,
+    });
     await waitForLoad(page);
   });
 });

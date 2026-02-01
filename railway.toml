@@ -1,0 +1,67 @@
+# =============================================================================
+# Railway Configuration for APCD Portal Monorepo
+# =============================================================================
+#
+# This monorepo contains TWO services that must be created separately in the
+# Railway dashboard:
+#
+#   1. API Service (NestJS)
+#      - Dockerfile Path : apps/api/Dockerfile
+#      - Port            : 4000
+#      - Health Check    : /api/health
+#
+#   2. Web Service (Next.js)
+#      - Dockerfile Path : apps/web/Dockerfile
+#      - Port            : 3000
+#      - Health Check    : / (or any page route)
+#
+# SETUP INSTRUCTIONS:
+#
+#   1. Create a new project in the Railway dashboard.
+#   2. Add two services from the same GitHub repository.
+#   3. For the API service:
+#      - Go to Settings > Build > Dockerfile Path and set: apps/api/Dockerfile
+#      - Railway will use the [build] and [deploy] sections below automatically.
+#   4. For the Web service:
+#      - Go to Settings > Build > Dockerfile Path and set: apps/web/Dockerfile
+#      - Override the deploy settings in the dashboard:
+#          Health Check Path : /
+#          Port              : 3000
+#   5. Configure environment variables for each service (see below).
+#
+# ENVIRONMENT VARIABLES:
+#
+#   API service requires:
+#     - DATABASE_URL          : PostgreSQL connection string
+#     - JWT_SECRET            : Secret key for JWT token signing
+#     - JWT_EXPIRATION        : Token expiration (e.g., "1d")
+#     - CORS_ORIGINS          : Comma-separated allowed origins
+#     - NODE_ENV              : production
+#     - PORT                  : 4000 (Railway sets this automatically)
+#
+#   Web service requires:
+#     - NEXT_PUBLIC_API_URL   : URL of the deployed API service
+#     - NODE_ENV              : production
+#     - PORT                  : 3000 (Railway sets this automatically)
+#
+#   Railway provides these automatically:
+#     - RAILWAY_ENVIRONMENT
+#     - RAILWAY_SERVICE_NAME
+#     - RAILWAY_PUBLIC_DOMAIN (if a public domain is attached)
+#
+# NOTE: This railway.toml applies to whichever service Railway loads it for.
+#       The Dockerfile path set in the dashboard takes precedence over the
+#       dockerfilePath value here. The settings below are tuned for the API
+#       service. For the Web service, override healthcheckPath and
+#       numReplicas in the Railway dashboard as needed.
+# =============================================================================
+
+[build]
+dockerfilePath = "apps/api/Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+numReplicas = 1
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
