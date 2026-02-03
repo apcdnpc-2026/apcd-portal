@@ -8,6 +8,12 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
+// Early startup logging for debugging deployment issues
+console.log('=== APCD Portal API Starting ===');
+console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`PORT: ${process.env.PORT}`);
+console.log(`DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
+
 // BigInt cannot be serialized to JSON by default — this polyfill converts to Number
 // Safe for fileSizeBytes which won't exceed Number.MAX_SAFE_INTEGER
 (BigInt.prototype as any).toJSON = function () {
@@ -15,7 +21,9 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 };
 
 async function bootstrap() {
+  console.log('Creating NestJS application...');
   const app = await NestFactory.create(AppModule);
+  console.log('NestJS application created successfully');
   const configService = app.get(ConfigService);
 
   // CORS
@@ -111,11 +119,13 @@ async function bootstrap() {
   }
 
   const port = configService.get<number>('PORT', 3001);
-  await app.listen(port);
-  console.log(`APCD Portal API running on http://localhost:${port}`);
+  // Listen on 0.0.0.0 to accept connections from outside container (required for Railway)
+  await app.listen(port, '0.0.0.0');
+  console.log(`APCD Portal API running on http://0.0.0.0:${port}`);
+  console.log(`Health check: http://0.0.0.0:${port}/api/health`);
   console.log(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
   if (configService.get<string>('NODE_ENV') !== 'production') {
-    console.log(`Swagger docs: http://localhost:${port}/api/docs`);
+    console.log(`Swagger docs: http://0.0.0.0:${port}/api/docs`);
   }
 }
 
