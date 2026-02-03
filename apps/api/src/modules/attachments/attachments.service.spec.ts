@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaClient, ApplicationStatus, DocumentType } from '@prisma/client';
 import { mockDeep, DeepMockProxy } from 'jest-mock-extended';
@@ -11,6 +7,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { MinioService } from '../../infrastructure/storage/minio.service';
 
 import { AttachmentsService } from './attachments.service';
+import { ExifValidationPipelineService } from './exif-validation-pipeline.service';
 import { GeoTagValidatorService } from './geo-tag-validator.service';
 
 // ---------------------------------------------------------------------------
@@ -80,7 +77,7 @@ describe('AttachmentsService', () => {
     isAvailable: jest.Mock;
     getLocalStoragePath: jest.Mock;
   };
-  let geoValidator: { extractAndValidate: jest.Mock };
+  let exifPipeline: { validate: jest.Mock; assessGpsAccuracy: jest.Mock };
 
   beforeEach(async () => {
     const mockPrisma = mockDeep<PrismaClient>();
@@ -95,6 +92,24 @@ describe('AttachmentsService', () => {
     const mockGeoValidator = {
       extractAndValidate: jest.fn(),
     };
+    const mockExifPipeline = {
+      validate: jest.fn().mockResolvedValue({
+        extractionSuccess: true,
+        hasGps: true,
+        hasTimestamp: true,
+        latitude: 28.6139,
+        longitude: 77.209,
+        geoTimestamp: new Date().toISOString(),
+        isWithinIndia: true,
+        trustScore: 85,
+        flags: [],
+        exif: {},
+        geo: {},
+        timestamp: {},
+        antiSpoofing: {},
+      }),
+      assessGpsAccuracy: jest.fn().mockReturnValue('GOOD'),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -102,13 +117,14 @@ describe('AttachmentsService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: MinioService, useValue: mockMinio },
         { provide: GeoTagValidatorService, useValue: mockGeoValidator },
+        { provide: ExifValidationPipelineService, useValue: mockExifPipeline },
       ],
     }).compile();
 
     service = module.get<AttachmentsService>(AttachmentsService);
     prisma = mockPrisma;
     minioService = mockMinio;
-    geoValidator = mockGeoValidator;
+    exifPipeline = mockExifPipeline;
   });
 
   // =========================================================================
@@ -121,12 +137,7 @@ describe('AttachmentsService', () => {
       prisma.attachment.create.mockResolvedValue(mockAttachment as any);
 
       const file = createMockFile();
-      await service.upload(
-        'app-1',
-        DocumentType.COMPANY_REGISTRATION,
-        file,
-        'user-1',
-      );
+      await service.upload('app-1', DocumentType.COMPANY_REGISTRATION, file, 'user-1');
 
       expect(minioService.uploadFile).toHaveBeenCalled();
       expect(prisma.attachment.create).toHaveBeenCalledWith({
@@ -150,12 +161,7 @@ describe('AttachmentsService', () => {
       prisma.attachment.create.mockResolvedValue(mockAttachment as any);
 
       const file = createMockFile();
-      await service.upload(
-        'app-1',
-        DocumentType.GST_CERTIFICATE,
-        file,
-        'user-1',
-      );
+      await service.upload('app-1', DocumentType.GST_CERTIFICATE, file, 'user-1');
 
       expect(minioService.uploadFile).toHaveBeenCalled();
       expect(prisma.attachment.create).toHaveBeenCalled();
@@ -180,12 +186,7 @@ describe('AttachmentsService', () => {
       prisma.attachment.create.mockResolvedValue(mockAttachment as any);
 
       const file = createMockFile();
-      await service.upload(
-        'app-1',
-        DocumentType.COMPANY_REGISTRATION,
-        file,
-        'user-1',
-      );
+      await service.upload('app-1', DocumentType.COMPANY_REGISTRATION, file, 'user-1');
 
       const createCall = prisma.attachment.create.mock.calls[0][0];
       expect(createCall.data.checksum).toMatch(/^[a-f0-9]{64}$/);
@@ -312,20 +313,27 @@ describe('AttachmentsService', () => {
       ).resolves.toBeDefined();
     });
 
-    // --- GEO_TAGGED_PHOTOS: valid geo-tag ---
+    // --- GEO_TAGGED_PHOTOS: valid geo-tag (using ExifValidationPipeline) ---
     it('should validate geo-tag for GEO_TAGGED_PHOTOS document type', async () => {
       prisma.application.findUnique.mockResolvedValue(mockApplication as any);
       prisma.attachment.findFirst.mockResolvedValue(null);
       prisma.attachment.create.mockResolvedValue(mockAttachment as any);
+      prisma.exifMetadata.create.mockResolvedValue({} as any);
 
-      geoValidator.extractAndValidate.mockResolvedValue({
+      exifPipeline.validate.mockResolvedValue({
+        extractionSuccess: true,
         hasGps: true,
         hasTimestamp: true,
-        hasValidGeoTag: true,
         latitude: 28.6139,
         longitude: 77.209,
-        timestamp: new Date('2025-01-01'),
+        geoTimestamp: new Date('2025-01-01').toISOString(),
         isWithinIndia: true,
+        trustScore: 85,
+        flags: [],
+        exif: { make: 'Samsung', model: 'Galaxy' },
+        geo: { distanceFromFactoryM: 100, isWithinProximity: true },
+        timestamp: { ageHours: 1 },
+        antiSpoofing: { softwareRiskLevel: 'LOW', clientExifDistanceM: 50 },
       });
 
       const file = createMockFile({
@@ -333,15 +341,9 @@ describe('AttachmentsService', () => {
         originalname: 'factory.jpg',
       });
 
-      await service.upload(
-        'app-1',
-        DocumentType.GEO_TAGGED_PHOTOS,
-        file,
-        'user-1',
-        'front_view',
-      );
+      await service.upload('app-1', DocumentType.GEO_TAGGED_PHOTOS, file, 'user-1', 'front_view');
 
-      expect(geoValidator.extractAndValidate).toHaveBeenCalledWith(file.buffer);
+      expect(exifPipeline.validate).toHaveBeenCalled();
       expect(prisma.attachment.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           hasValidGeoTag: true,
@@ -395,16 +397,26 @@ describe('AttachmentsService', () => {
       ).rejects.toThrow(/front_view/);
     });
 
-    // --- GEO_TAGGED_PHOTOS: no GPS in EXIF ---
+    // --- GEO_TAGGED_PHOTOS: no GPS in EXIF (now using ExifValidationPipeline) ---
     it('should throw BadRequestException when geo-tagged photo has no GPS', async () => {
       prisma.application.findUnique.mockResolvedValue(mockApplication as any);
       prisma.attachment.findFirst.mockResolvedValue(null);
 
-      geoValidator.extractAndValidate.mockResolvedValue({
+      exifPipeline.validate.mockResolvedValue({
+        extractionSuccess: true,
         hasGps: false,
         hasTimestamp: true,
-        hasValidGeoTag: false,
         error: 'GPS coordinates not found in image EXIF data.',
+        latitude: null,
+        longitude: null,
+        geoTimestamp: new Date().toISOString(),
+        isWithinIndia: false,
+        trustScore: 0,
+        flags: [],
+        exif: {},
+        geo: {},
+        timestamp: {},
+        antiSpoofing: {},
       });
 
       const file = createMockFile({ mimetype: 'image/jpeg' });
@@ -418,11 +430,21 @@ describe('AttachmentsService', () => {
       prisma.application.findUnique.mockResolvedValue(mockApplication as any);
       prisma.attachment.findFirst.mockResolvedValue(null);
 
-      geoValidator.extractAndValidate.mockResolvedValue({
+      exifPipeline.validate.mockResolvedValue({
+        extractionSuccess: true,
         hasGps: true,
         hasTimestamp: false,
-        hasValidGeoTag: false,
         error: 'Timestamp not found in image EXIF data.',
+        latitude: 28.6139,
+        longitude: 77.209,
+        geoTimestamp: null,
+        isWithinIndia: true,
+        trustScore: 0,
+        flags: [],
+        exif: {},
+        geo: {},
+        timestamp: {},
+        antiSpoofing: {},
       });
 
       const file = createMockFile({ mimetype: 'image/jpeg' });
@@ -436,11 +458,21 @@ describe('AttachmentsService', () => {
       prisma.application.findUnique.mockResolvedValue(mockApplication as any);
       prisma.attachment.findFirst.mockResolvedValue(null);
 
-      geoValidator.extractAndValidate.mockResolvedValue({
+      exifPipeline.validate.mockResolvedValue({
+        extractionSuccess: true,
         hasGps: false,
         hasTimestamp: false,
-        hasValidGeoTag: false,
         error: 'Photo has no GPS coordinates or timestamp. Use a Timestamp Camera app.',
+        latitude: null,
+        longitude: null,
+        geoTimestamp: null,
+        isWithinIndia: false,
+        trustScore: 0,
+        flags: [],
+        exif: {},
+        geo: {},
+        timestamp: {},
+        antiSpoofing: {},
       });
 
       const file = createMockFile({ mimetype: 'image/jpeg' });
@@ -459,14 +491,9 @@ describe('AttachmentsService', () => {
         originalname: 'factory_layout.pdf',
       });
 
-      await service.upload(
-        'app-1',
-        DocumentType.GEO_TAGGED_PHOTOS,
-        file,
-        'user-1',
-      );
+      await service.upload('app-1', DocumentType.GEO_TAGGED_PHOTOS, file, 'user-1');
 
-      expect(geoValidator.extractAndValidate).not.toHaveBeenCalled();
+      expect(exifPipeline.validate).not.toHaveBeenCalled();
     });
   });
 
@@ -516,14 +543,11 @@ describe('AttachmentsService', () => {
 
       const result = await service.getDownloadUrl('att-1', 'user-1', 'OEM');
 
-      expect(minioService.getPresignedUrl).toHaveBeenCalledWith(
-        mockAttachment.storagePath,
-        3600,
-      );
+      expect(minioService.getPresignedUrl).toHaveBeenCalledWith(mockAttachment.storagePath, 3600);
       expect(result).toBe('https://presigned-url.com/file');
     });
 
-    it('should throw ForbiddenException when OEM tries to access another user\'s attachment', async () => {
+    it("should throw ForbiddenException when OEM tries to access another user's attachment", async () => {
       prisma.attachment.findUnique.mockResolvedValue({
         ...mockAttachment,
         application: { ...mockApplication, applicantId: 'other-user' },

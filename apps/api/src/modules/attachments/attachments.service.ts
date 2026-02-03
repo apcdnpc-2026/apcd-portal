@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -33,6 +34,8 @@ import { GeoTagValidatorService } from './geo-tag-validator.service';
 
 @Injectable()
 export class AttachmentsService {
+  private readonly logger = new Logger(AttachmentsService.name);
+
   constructor(
     private prisma: PrismaService,
     private minio: MinioService,
