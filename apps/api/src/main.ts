@@ -118,7 +118,7 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document);
   }
 
-  const port = configService.get<number>('PORT', 3001);
+  const port = configService.get<number>('PORT', 4000);
   // Listen on 0.0.0.0 to accept connections from outside container (required for Railway)
   await app.listen(port, '0.0.0.0');
   console.log(`APCD Portal API running on http://0.0.0.0:${port}`);

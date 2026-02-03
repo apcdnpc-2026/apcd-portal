@@ -49,11 +49,11 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/node_modules ./node_modules
 
 # Expose port (matches railway.toml internalPort)
-EXPOSE 3001
+EXPOSE 4000
 
 # Set environment
 ENV NODE_ENV=production
-ENV PORT=3001
+ENV PORT=4000
 
 # Start Node.js directly (simpler, more reliable)
 CMD ["node", "apps/api/dist/main.js"]
