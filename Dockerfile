@@ -48,8 +48,12 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/node_modules ./node_modules
 
+# Copy startup script
+COPY scripts/docker-start.sh /app/docker-start.sh
+RUN chmod +x /app/docker-start.sh
+
 # Expose port
 EXPOSE 4000
 
-# Apply schema changes + seed on startup, then start the application
-CMD sh -c "echo '=== Applying schema ===' && cd /app/packages/database && npx prisma db push --skip-generate 2>&1 && echo '=== Running seed ===' && node prisma/seed-compiled.js 2>&1 && echo '=== Seed complete ===' || echo '=== Seed FAILED ==='; cd /app && node apps/api/dist/main.js"
+# Start app immediately, run migrations in background
+CMD ["/app/docker-start.sh"]
