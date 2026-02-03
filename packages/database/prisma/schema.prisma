@@ -229,6 +229,10 @@ model User {
   notifications       Notification[]
   paymentVerifications Payment[]         @relation("PaymentVerifiedBy")
   refreshTokens       RefreshToken[]
+  delegationsFrom     Delegation[]       @relation("DelegationsFrom")
+  delegationsTo       Delegation[]       @relation("DelegationsTo")
+  activeSessions      ActiveSession[]
+  pushSubscriptions   PushSubscription[]
 
   @@map("users")
 }
@@ -466,6 +470,7 @@ model Attachment {
   updatedAt       DateTime     @updatedAt @map("updated_at")
 
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  exifMetadata ExifMetadata?
 
   @@index([applicationId])
   @@index([documentType])
@@ -711,6 +716,8 @@ model Payment {
 
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   verifiedBy  User?       @relation("PaymentVerifiedBy", fields: [verifiedById], references: [id])
+  receipt     PaymentReceipt?
+  refunds     PaymentRefund[]
 
   @@index([applicationId])
   @@index([status])
@@ -755,22 +762,31 @@ model Certificate {
 // ============================================================================
 
 model AuditLog {
-  id            String   @id @default(uuid())
-  userId        String?  @map("user_id")
-  action        String                            // e.g., "APPLICATION_SUBMITTED", "QUERY_RAISED"
-  entityType    String   @map("entity_type")      // e.g., "Application", "Payment"
-  entityId      String   @map("entity_id")
-  oldValues     Json?    @map("old_values")
-  newValues     Json?    @map("new_values")
-  ipAddress     String?  @map("ip_address")
-  userAgent     String?  @map("user_agent")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid())
+  sequenceNumber  BigInt   @default(autoincrement()) @unique @map("sequence_number")
+  userId          String?  @map("user_id")
+  userRole        String?  @map("user_role")
+  sessionId       String?  @map("session_id")
+  action          String                            // e.g., "APPLICATION_SUBMITTED", "QUERY_RAISED"
+  entityType      String   @map("entity_type")      // e.g., "Application", "Payment"
+  entityId        String   @map("entity_id")
+  category        String   @default("GENERAL") @map("category")
+  severity        String   @default("INFO") @map("severity")
+  oldValues       Json?    @map("old_values")
+  newValues       Json?    @map("new_values")
+  ipAddress       String?  @map("ip_address")
+  userAgent       String?  @map("user_agent")
+  recordHash      String?  @map("record_hash")
+  previousHash    String?  @map("previous_hash")
+  createdAt       DateTime @default(now()) @map("created_at")
 
   user User? @relation(fields: [userId], references: [id])
 
   @@index([entityType, entityId])
   @@index([userId])
   @@index([action])
+  @@index([category])
+  @@index([severity])
   @@index([createdAt])
   @@map("audit_logs")
 }
@@ -814,4 +830,219 @@ model FeeConfiguration {
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
   @@map("fee_configurations")
+}
+
+// ============================================================================
+// EXIF METADATA (Geo-tagged Photo Verification)
+// ============================================================================
+
+model ExifMetadata {
+  id                    String    @id @default(uuid())
+  attachmentId          String    @unique @map("attachment_id")
+
+  // GPS
+  gpsLatitude           Decimal?  @map("gps_latitude") @db.Decimal(10, 7)
+  gpsLongitude          Decimal?  @map("gps_longitude") @db.Decimal(10, 7)
+  gpsAltitude           Decimal?  @map("gps_altitude") @db.Decimal(8, 2)
+  gpsAccuracyM          Decimal?  @map("gps_accuracy_m") @db.Decimal(8, 2)
+
+  // Timestamps
+  dateTimeOriginal      DateTime? @map("date_time_original")
+  dateTimeDigitized     DateTime? @map("date_time_digitized")
+  dateTimeModified      DateTime? @map("date_time_modified")
+
+  // Device
+  cameraMake            String?   @map("camera_make")
+  cameraModel           String?   @map("camera_model")
+  software              String?
+
+  // Validation Results
+  distanceFromFactoryM  Int?      @map("distance_from_factory_m")
+  isWithinProximity     Boolean?  @map("is_within_proximity")
+  gpsAccuracyGrade      String?   @map("gps_accuracy_grade")
+  timestampAgeHours     Decimal?  @map("timestamp_age_hours") @db.Decimal(10, 2)
+  softwareRiskLevel     String?   @map("software_risk_level")
+  overallTrustScore     Int?      @map("overall_trust_score")
+  spoofingFlags         Json?     @map("spoofing_flags")
+
+  // Client-side GPS (dual verification)
+  clientLatitude        Decimal?  @map("client_latitude") @db.Decimal(10, 7)
+  clientLongitude       Decimal?  @map("client_longitude") @db.Decimal(10, 7)
+  clientExifDistM       Int?      @map("client_exif_dist_m")
+
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  attachment            Attachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  @@index([overallTrustScore])
+  @@map("exif_metadata")
+}
+
+// ============================================================================
+// DOMAIN EVENTS (Event Sourcing)
+// ============================================================================
+
+model DomainEvent {
+  id              String   @id @default(uuid())
+  aggregateType   String   @map("aggregate_type")
+  aggregateId     String   @map("aggregate_id")
+  eventType       String   @map("event_type")
+  eventVersion    Int      @default(1) @map("event_version")
+  payload         Json
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([aggregateType, aggregateId, createdAt])
+  @@map("domain_events")
+}
+
+// ============================================================================
+// PAYMENT RECEIPTS, REFUNDS & RECONCILIATION
+// ============================================================================
+
+model PaymentReceipt {
+  id                String   @id @default(uuid())
+  paymentId         String   @unique @map("payment_id")
+  receiptNumber     String   @unique @map("receipt_number")
+  financialYear     String   @map("financial_year")
+  sequenceNumber    Int      @map("sequence_number")
+  receiptDate       DateTime @default(now()) @map("receipt_date")
+  qrCodeData        String?  @map("qr_code_data")
+  digitalSignature  String?  @map("digital_signature")
+  signedBy          String?  @map("signed_by")
+  pdfPath           String?  @map("pdf_path")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  payment           Payment  @relation(fields: [paymentId], references: [id])
+
+  @@map("payment_receipts")
+}
+
+model PaymentRefund {
+  id                String    @id @default(uuid())
+  paymentId         String    @map("payment_id")
+  reason            String
+  refundAmount      Decimal   @map("refund_amount") @db.Decimal(12, 2)
+  status            String    @default("REQUESTED")
+  gatewayRefundId   String?   @map("gateway_refund_id")
+  requestedBy       String?   @map("requested_by")
+  approvedBy        String?   @map("approved_by")
+  approvedAt        DateTime? @map("approved_at")
+  processedAt       DateTime? @map("processed_at")
+  rejectionReason   String?   @map("rejection_reason")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  payment           Payment   @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@index([status])
+  @@map("payment_refunds")
+}
+
+model PaymentReconciliation {
+  id                  String    @id @default(uuid())
+  reconciliationDate  DateTime  @map("reconciliation_date")
+  gatewayName         String    @map("gateway_name")
+  portalAmount        Decimal   @map("portal_amount") @db.Decimal(12, 2)
+  gatewayAmount       Decimal   @map("gateway_amount") @db.Decimal(12, 2)
+  bankAmount          Decimal?  @map("bank_amount") @db.Decimal(12, 2)
+  status              String
+  discrepancyAmount   Decimal?  @map("discrepancy_amount") @db.Decimal(12, 2)
+  resolvedBy          String?   @map("resolved_by")
+  resolvedAt          DateTime? @map("resolved_at")
+  notes               String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  @@index([reconciliationDate])
+  @@index([status])
+  @@map("payment_reconciliations")
+}
+
+// ============================================================================
+// DELEGATION (Role Delegation / Acting Charge)
+// ============================================================================
+
+enum DelegationType {
+  LEAVE
+  TRANSFER
+  ACTING_CHARGE
+  COMMITTEE_ROTATION
+}
+
+model Delegation {
+  id              String          @id @default(uuid())
+  delegationType  DelegationType  @map("delegation_type")
+  fromUserId      String          @map("from_user_id")
+  toUserId        String          @map("to_user_id")
+  startDate       DateTime        @map("start_date")
+  endDate         DateTime?       @map("end_date")
+  scope           Json?
+  reason          String
+  approvedBy      String          @map("approved_by")
+  isActive        Boolean         @default(true) @map("is_active")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  fromUser        User            @relation("DelegationsFrom", fields: [fromUserId], references: [id])
+  toUser          User            @relation("DelegationsTo", fields: [toUserId], references: [id])
+
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([isActive])
+  @@map("delegations")
+}
+
+// ============================================================================
+// SESSION & LOGIN TRACKING (GIGW Compliance)
+// ============================================================================
+
+model ActiveSession {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  tokenHash     String    @map("token_hash")
+  ipAddress     String?   @map("ip_address")
+  userAgent     String?   @map("user_agent")
+  lastActiveAt  DateTime  @default(now()) @map("last_active_at")
+  expiresAt     DateTime  @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("active_sessions")
+}
+
+model LoginAttempt {
+  id          String   @id @default(uuid())
+  email       String
+  ipAddress   String?  @map("ip_address")
+  success     Boolean
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+  @@map("login_attempts")
+}
+
+// ============================================================================
+// PUSH SUBSCRIPTIONS (Web Push Notifications)
+// ============================================================================
+
+model PushSubscription {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  endpoint    String
+  p256dh      String
+  auth        String
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+  @@index([userId])
+  @@map("push_subscriptions")
 }
