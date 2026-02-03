@@ -48,12 +48,16 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/node_modules ./node_modules
 
-# Copy startup script
+# Copy startup script and fix Windows line endings (CRLF -> LF)
 COPY scripts/docker-start.sh /app/docker-start.sh
-RUN chmod +x /app/docker-start.sh
+RUN sed -i 's/\r$//' /app/docker-start.sh && chmod +x /app/docker-start.sh
 
 # Expose port (matches railway.toml internalPort)
 EXPOSE 3001
+
+# Set environment
+ENV NODE_ENV=production
+ENV PORT=3001
 
 # Start app immediately, run migrations in background
 CMD ["/app/docker-start.sh"]
