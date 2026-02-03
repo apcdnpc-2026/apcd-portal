@@ -1,0 +1,72 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+# Deploy: Connect GitHub repo and Render auto-detects this file
+
+services:
+  # NestJS API Backend
+  - type: web
+    name: apcd-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: apcd-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: MINIO_ENDPOINT
+        fromService:
+          name: apcd-minio
+          type: pserv
+          property: host
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+
+  # Next.js Web Frontend
+  - type: web
+    name: apcd-web
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          name: apcd-api
+          type: web
+          property: url
+
+  # MinIO Object Storage (Private Service)
+  - type: pserv
+    name: apcd-minio
+    runtime: docker
+    dockerCommand: server /data --console-address ":9001"
+    disk:
+      name: minio-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: MINIO_ROOT_USER
+        sync: false
+      - key: MINIO_ROOT_PASSWORD
+        sync: false
+
+databases:
+  - name: apcd-db
+    databaseName: apcd_portal
+    plan: starter
+    postgresMajorVersion: 15

@@ -1,0 +1,140 @@
+# Artillery Load Test Configuration
+# Run: npx artillery run load-test.yml
+
+config:
+  target: "http://localhost:3001"
+  phases:
+    # Warm-up phase
+    - duration: 30
+      arrivalRate: 5
+      name: "Warm-up"
+    # Ramp-up to 50 users
+    - duration: 60
+      arrivalRate: 10
+      rampTo: 50
+      name: "Ramp-up"
+    # Sustained load - 100 concurrent
+    - duration: 120
+      arrivalRate: 50
+      name: "Sustained Load"
+    # Spike test
+    - duration: 30
+      arrivalRate: 100
+      name: "Spike"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+
+  plugins:
+    expect: {}
+
+  variables:
+    testEmail: "loadtest@example.com"
+    testPassword: "LoadTest123!"
+
+scenarios:
+  # Health check (baseline)
+  - name: "Health Check"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/health"
+          expect:
+            - statusCode: 200
+
+  # OEM Login flow
+  - name: "OEM Login"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "{{ testEmail }}"
+            password: "{{ testPassword }}"
+          capture:
+            - json: "$.accessToken"
+              as: "token"
+          expect:
+            - statusCode:
+                - 200
+                - 401
+
+  # Dashboard load
+  - name: "Dashboard Data"
+    weight: 25
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "{{ testEmail }}"
+            password: "{{ testPassword }}"
+          capture:
+            - json: "$.accessToken"
+              as: "token"
+      - get:
+          url: "/api/dashboard/summary"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          expect:
+            - statusCode:
+                - 200
+                - 401
+
+  # Application list
+  - name: "List Applications"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "{{ testEmail }}"
+            password: "{{ testPassword }}"
+          capture:
+            - json: "$.accessToken"
+              as: "token"
+      - get:
+          url: "/api/applications?page=1&limit=20"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          expect:
+            - statusCode:
+                - 200
+                - 401
+
+  # Reference data (cached)
+  - name: "Reference Data"
+    weight: 15
+    flow:
+      - get:
+          url: "/api/apcd-types"
+          expect:
+            - statusCode: 200
+      - get:
+          url: "/api/states"
+          expect:
+            - statusCode: 200
+
+  # File upload simulation (heavy)
+  - name: "File Upload"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "{{ testEmail }}"
+            password: "{{ testPassword }}"
+          capture:
+            - json: "$.accessToken"
+              as: "token"
+      - think: 2
+      # Note: Actual file upload requires multipart form
+      # This simulates the pre-upload validation
+      - get:
+          url: "/api/applications?status=DRAFT"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          expect:
+            - statusCode:
+                - 200
+                - 401
