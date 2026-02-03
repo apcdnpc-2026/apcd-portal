@@ -1,3 +1,5 @@
+import * as crypto from 'crypto';
+
 import {
   Injectable,
   NotFoundException,
@@ -18,10 +20,15 @@ const ALLOWED_MIME_TYPES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];
-import * as crypto from 'crypto';
 
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { MinioService } from '../../infrastructure/storage/minio.service';
+
+import {
+  ExifValidationPipelineService,
+  ValidationContext,
+  FullValidationResult,
+} from './exif-validation-pipeline.service';
 import { GeoTagValidatorService } from './geo-tag-validator.service';
 
 @Injectable()
@@ -30,6 +37,7 @@ export class AttachmentsService {
     private prisma: PrismaService,
     private minio: MinioService,
     private geoValidator: GeoTagValidatorService,
+    private exifPipeline: ExifValidationPipelineService,
   ) {}
 
   /**
@@ -51,7 +59,10 @@ export class AttachmentsService {
     if (!application) throw new NotFoundException('Application not found');
     if (application.applicantId !== userId) throw new ForbiddenException();
 
-    const editableStatuses: ApplicationStatus[] = [ApplicationStatus.DRAFT, ApplicationStatus.QUERIED];
+    const editableStatuses: ApplicationStatus[] = [
+      ApplicationStatus.DRAFT,
+      ApplicationStatus.QUERIED,
+    ];
     if (!editableStatuses.includes(application.status as ApplicationStatus)) {
       throw new BadRequestException('Cannot upload documents at this application stage');
     }
@@ -87,43 +98,52 @@ export class AttachmentsService {
     // Generate storage path
     const objectKey = MinioService.buildObjectKey(applicationId, documentType, file.originalname);
 
-    // Extract and validate geo-tag for factory photos
-    let geoData: Record<string, any> = {};
+    // Extract and validate geo-tag for factory photos / field photos
+    let geoData: Record<string, unknown> = {};
+    let exifValidationResult: FullValidationResult | null = null;
 
-    if (
-      documentType === DocumentType.GEO_TAGGED_PHOTOS &&
-      file.mimetype.startsWith('image/')
-    ) {
-      if (!photoSlot) {
+    const isGeoTaggedType =
+      documentType === DocumentType.GEO_TAGGED_PHOTOS || documentType === DocumentType.FIELD_PHOTOS;
+
+    if (isGeoTaggedType && file.mimetype.startsWith('image/')) {
+      if (documentType === DocumentType.GEO_TAGGED_PHOTOS && !photoSlot) {
         throw new BadRequestException('photoSlot is required for geo-tagged factory photos');
       }
 
-      // Check for duplicate slot
-      const existing = await this.prisma.attachment.findFirst({
-        where: { applicationId, documentType, photoSlot },
-      });
-      if (existing) {
-        throw new BadRequestException(
-          `A photo for slot "${photoSlot}" already exists. Delete the existing one first.`,
-        );
+      // Check for duplicate slot (only for GEO_TAGGED_PHOTOS)
+      if (documentType === DocumentType.GEO_TAGGED_PHOTOS && photoSlot) {
+        const existing = await this.prisma.attachment.findFirst({
+          where: { applicationId, documentType, photoSlot },
+        });
+        if (existing) {
+          throw new BadRequestException(
+            `A photo for slot "${photoSlot}" already exists. Delete the existing one first.`,
+          );
+        }
       }
 
-      const geoResult = await this.geoValidator.extractAndValidate(file.buffer);
+      // Build validation context
+      const validationContext: ValidationContext = {
+        verificationType: documentType === DocumentType.FIELD_PHOTOS ? 'FIELD_VERIFICATION' : 'OEM',
+      };
 
-      if (!geoResult.hasGps || !geoResult.hasTimestamp) {
+      // Run the enhanced EXIF validation pipeline
+      exifValidationResult = await this.exifPipeline.validate(file.buffer, validationContext);
+
+      if (!exifValidationResult.hasGps || !exifValidationResult.hasTimestamp) {
         throw new BadRequestException(
-          geoResult.error ||
+          exifValidationResult.error ||
             'Photo must contain both GPS coordinates and a timestamp in EXIF data. Use a Timestamp Camera app.',
         );
       }
 
       geoData = {
         hasValidGeoTag: true,
-        geoLatitude: geoResult.latitude,
-        geoLongitude: geoResult.longitude,
-        geoTimestamp: geoResult.timestamp,
-        isWithinIndia: geoResult.isWithinIndia,
-        photoSlot,
+        geoLatitude: exifValidationResult.latitude,
+        geoLongitude: exifValidationResult.longitude,
+        geoTimestamp: exifValidationResult.geoTimestamp,
+        isWithinIndia: exifValidationResult.isWithinIndia,
+        ...(photoSlot ? { photoSlot } : {}),
       };
     }
 
@@ -132,7 +152,7 @@ export class AttachmentsService {
 
     // Create attachment record — also store file bytes in DB so files survive
     // ephemeral container restarts (Railway, etc.)
-    return this.prisma.attachment.create({
+    const attachment = await this.prisma.attachment.create({
       data: {
         applicationId,
         documentType,
@@ -149,6 +169,48 @@ export class AttachmentsService {
         ...geoData,
       },
     });
+
+    // Create ExifMetadata record if we ran the validation pipeline
+    if (exifValidationResult && exifValidationResult.extractionSuccess) {
+      try {
+        await this.prisma.exifMetadata.create({
+          data: {
+            attachmentId: attachment.id,
+            gpsLatitude: exifValidationResult.latitude ?? null,
+            gpsLongitude: exifValidationResult.longitude ?? null,
+            gpsAltitude: exifValidationResult.exif.altitude ?? null,
+            gpsAccuracyM: exifValidationResult.exif.gpsAccuracyM ?? null,
+            dateTimeOriginal: exifValidationResult.exif.dateTimeOriginal ?? null,
+            dateTimeDigitized: exifValidationResult.exif.dateTimeDigitized ?? null,
+            dateTimeModified: exifValidationResult.exif.dateTime ?? null,
+            cameraMake: exifValidationResult.exif.make ?? null,
+            cameraModel: exifValidationResult.exif.model ?? null,
+            software: exifValidationResult.exif.software ?? null,
+            distanceFromFactoryM: exifValidationResult.geo.distanceFromFactoryM ?? null,
+            isWithinProximity: exifValidationResult.geo.isWithinProximity ?? null,
+            gpsAccuracyGrade: this.exifPipeline.assessGpsAccuracy(
+              exifValidationResult.exif.gpsAccuracyM,
+            ),
+            timestampAgeHours: exifValidationResult.timestamp.ageHours ?? null,
+            softwareRiskLevel: exifValidationResult.antiSpoofing.softwareRiskLevel,
+            overallTrustScore: exifValidationResult.trustScore,
+            spoofingFlags:
+              exifValidationResult.flags.length > 0
+                ? JSON.parse(JSON.stringify(exifValidationResult.flags))
+                : undefined,
+            clientLatitude: null,
+            clientLongitude: null,
+            clientExifDistM: exifValidationResult.antiSpoofing.clientExifDistanceM ?? null,
+          },
+        });
+      } catch (error: unknown) {
+        this.logger.warn(
+          `ExifMetadata creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
+    }
+
+    return attachment;
   }
 
   /**
@@ -193,7 +255,10 @@ export class AttachmentsService {
     if (!attachment) throw new NotFoundException('Attachment not found');
     if (attachment.application.applicantId !== userId) throw new ForbiddenException();
 
-    const editableStatuses2: ApplicationStatus[] = [ApplicationStatus.DRAFT, ApplicationStatus.QUERIED];
+    const editableStatuses2: ApplicationStatus[] = [
+      ApplicationStatus.DRAFT,
+      ApplicationStatus.QUERIED,
+    ];
     if (!editableStatuses2.includes(attachment.application.status as ApplicationStatus)) {
       throw new BadRequestException('Cannot delete documents at this application stage');
     }
@@ -249,12 +314,7 @@ export class AttachmentsService {
   /**
    * Verify a document (officer action)
    */
-  async verify(
-    attachmentId: string,
-    verifiedBy: string,
-    isVerified: boolean,
-    note?: string,
-  ) {
+  async verify(attachmentId: string, verifiedBy: string, isVerified: boolean, note?: string) {
     return this.prisma.attachment.update({
       where: { id: attachmentId },
       data: {

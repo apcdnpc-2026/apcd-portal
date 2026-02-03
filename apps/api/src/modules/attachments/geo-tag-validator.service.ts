@@ -25,6 +25,9 @@ export class GeoTagValidatorService {
   /**
    * Extract and validate GPS coordinates AND timestamp from image EXIF data.
    * Returns granular validation results for badge display.
+   *
+   * @deprecated Use ExifValidationPipelineService.validate() instead.
+   * This method is kept for backward compatibility with existing tests.
    */
   async extractAndValidate(buffer: Buffer): Promise<GeoValidationResult> {
     try {
@@ -99,6 +102,8 @@ export class GeoTagValidatorService {
 
   /**
    * Extract GPS coordinates from image EXIF data (legacy method).
+   *
+   * @deprecated Use ExifValidationPipelineService.validate() instead.
    */
   async extractGeoTag(buffer: Buffer): Promise<GeoTagResult> {
     const result = await this.extractAndValidate(buffer);
@@ -113,6 +118,8 @@ export class GeoTagValidatorService {
 
   /**
    * Validate that coordinates are within India bounds (approximately)
+   *
+   * @deprecated Use ExifValidationPipelineService.isWithinIndia() instead.
    */
   isWithinIndia(latitude: number, longitude: number): boolean {
     const INDIA_BOUNDS = {
