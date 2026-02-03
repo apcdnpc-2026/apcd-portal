@@ -2,17 +2,17 @@ import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 
-interface ActionCount {
+export interface ActionCount {
   action: string;
   count: number;
 }
 
-interface EntityCount {
+export interface EntityCount {
   entity: string;
   count: number;
 }
 
-interface Anomaly {
+export interface Anomaly {
   type: 'AFTER_HOURS' | 'BULK_OPERATION' | 'FAILED_ACCESS' | 'SUSPICIOUS_PATTERN';
   description: string;
   severity: 'LOW' | 'MEDIUM' | 'HIGH';
@@ -21,7 +21,7 @@ interface Anomaly {
   details: Record<string, unknown>;
 }
 
-interface RTIReport {
+export interface RTIReport {
   period: { start: Date; end: Date };
   totalEntries: number;
   byAction: ActionCount[];
@@ -30,13 +30,13 @@ interface RTIReport {
   summary: string;
 }
 
-interface MonthlyBreakdown {
+export interface MonthlyBreakdown {
   month: string;
   totalActions: number;
   byCategory: Record<string, number>;
 }
 
-interface CAGReport {
+export interface CAGReport {
   financialYear: string;
   monthlyBreakdown: MonthlyBreakdown[];
   paymentAudit: Array<Record<string, unknown>>;
@@ -44,7 +44,7 @@ interface CAGReport {
   userActivitySummary: Array<{ userId: string; role: string; actionCount: number }>;
 }
 
-interface ComplianceReport {
+export interface ComplianceReport {
   period: { start: Date; end: Date };
   totalActions: number;
   anomalies: Anomaly[];

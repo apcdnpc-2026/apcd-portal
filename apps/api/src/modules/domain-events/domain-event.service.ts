@@ -86,8 +86,8 @@ export class DomainEventService {
         aggregateId,
         eventType,
         eventVersion: nextVersion,
-        payload: eventData,
-        metadata: Object.keys(metadata).length > 0 ? metadata : null,
+        payload: JSON.parse(JSON.stringify(eventData)),
+        metadata: Object.keys(metadata).length > 0 ? JSON.parse(JSON.stringify(metadata)) : null,
       },
     });
 
@@ -185,7 +185,10 @@ export class DomainEventService {
 
     switch (aggregateType) {
       case 'Application':
-        state = this.applicationEventsHandler.reconstructApplication(events);
+        state = this.applicationEventsHandler.reconstructApplication(events) as unknown as Record<
+          string,
+          unknown
+        >;
         break;
       default:
         // Generic reconstruction - just merge all event payloads

@@ -11,7 +11,7 @@ interface GatewayTransaction {
   capturedAt: Date | null;
 }
 
-interface Discrepancy {
+export interface Discrepancy {
   type: 'AMOUNT_MISMATCH' | 'MISSING_IN_GATEWAY' | 'MISSING_IN_DB' | 'STATUS_MISMATCH';
   paymentId: string | null;
   gatewayId: string | null;
@@ -64,11 +64,11 @@ export class ReconciliationService {
       // Fetch DB payments
       const dbPayments = await this.prisma.payment.findMany({
         where: {
-          paidAt: {
+          verifiedAt: {
             gte: startDate,
             lte: endDate,
           },
-          status: { in: ['CAPTURED', 'SUCCESS'] },
+          status: { in: ['COMPLETED', 'VERIFIED'] },
         },
       });
 
@@ -79,7 +79,7 @@ export class ReconciliationService {
       const result = this.compareTransactions(dbPayments, gatewayTxns);
 
       // Calculate totals
-      const totalPayments = dbPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const totalPayments = dbPayments.reduce((sum, p) => sum + Number(p.totalAmount), 0);
       const totalGateway = gatewayTxns.reduce((sum, t) => sum + t.amount, 0);
 
       // Update reconciliation record
@@ -91,7 +91,7 @@ export class ReconciliationService {
           totalBank: totalPayments, // Placeholder - would come from bank statement
           matchedCount: result.matched,
           mismatchedCount: result.mismatched,
-          discrepancies: result.discrepancies as unknown as Record<string, unknown>[],
+          discrepancies: JSON.parse(JSON.stringify(result.discrepancies)),
           status: 'COMPLETED',
           completedAt: new Date(),
         },
@@ -184,17 +184,17 @@ export class ReconciliationService {
     // For now, return DB payments as if they came from gateway (simulates 100% match)
     const payments = await this.prisma.payment.findMany({
       where: {
-        paidAt: { gte: startDate, lte: endDate },
-        status: { in: ['CAPTURED', 'SUCCESS'] },
+        verifiedAt: { gte: startDate, lte: endDate },
+        status: { in: ['COMPLETED', 'VERIFIED'] },
       },
     });
 
     return payments.map((p) => ({
-      id: p.gatewayPaymentId || p.id,
-      orderId: p.gatewayOrderId || '',
-      amount: Number(p.amount),
+      id: p.razorpayPaymentId || p.id,
+      orderId: p.razorpayOrderId || '',
+      amount: Number(p.totalAmount),
       status: p.status,
-      capturedAt: p.paidAt,
+      capturedAt: p.verifiedAt,
     }));
   }
 
@@ -204,8 +204,8 @@ export class ReconciliationService {
   private compareTransactions(
     dbPayments: Array<{
       id: string;
-      gatewayPaymentId: string | null;
-      amount: unknown;
+      razorpayPaymentId: string | null;
+      totalAmount: unknown;
       status: string;
     }>,
     gatewayTxns: GatewayTransaction[],
@@ -219,7 +219,7 @@ export class ReconciliationService {
 
     // Check each DB payment against gateway
     for (const dbPayment of dbPayments) {
-      const gatewayTxn = gatewayMap.get(dbPayment.gatewayPaymentId || '');
+      const gatewayTxn = gatewayMap.get(dbPayment.razorpayPaymentId || '');
 
       if (!gatewayTxn) {
         discrepancies.push(this.classifyDiscrepancy(dbPayment, null));
@@ -229,7 +229,7 @@ export class ReconciliationService {
 
       processedGatewayIds.add(gatewayTxn.id);
 
-      const dbAmount = Number(dbPayment.amount);
+      const dbAmount = Number(dbPayment.totalAmount);
       const gatewayAmount = gatewayTxn.amount;
 
       if (Math.abs(dbAmount - gatewayAmount) > 0.01) {
@@ -276,7 +276,7 @@ export class ReconciliationService {
    * Classify the type of discrepancy
    */
   private classifyDiscrepancy(
-    dbRecord: { id: string; amount: unknown; status: string } | null,
+    dbRecord: { id: string; totalAmount: unknown; status: string } | null,
     gatewayRecord: GatewayTransaction | null,
   ): Discrepancy {
     if (!gatewayRecord) {
@@ -284,7 +284,7 @@ export class ReconciliationService {
         type: 'MISSING_IN_GATEWAY',
         paymentId: dbRecord?.id || null,
         gatewayId: null,
-        dbAmount: dbRecord ? Number(dbRecord.amount) : null,
+        dbAmount: dbRecord ? Number(dbRecord.totalAmount) : null,
         gatewayAmount: null,
         dbStatus: dbRecord?.status || null,
         gatewayStatus: null,
@@ -309,11 +309,11 @@ export class ReconciliationService {
       type: 'AMOUNT_MISMATCH',
       paymentId: dbRecord.id,
       gatewayId: gatewayRecord.id,
-      dbAmount: Number(dbRecord.amount),
+      dbAmount: Number(dbRecord.totalAmount),
       gatewayAmount: gatewayRecord.amount,
       dbStatus: dbRecord.status,
       gatewayStatus: gatewayRecord.status,
-      description: `Amount mismatch: DB=${dbRecord.amount}, Gateway=${gatewayRecord.amount}`,
+      description: `Amount mismatch: DB=${dbRecord.totalAmount}, Gateway=${gatewayRecord.amount}`,
     };
   }
 }

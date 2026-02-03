@@ -41,4 +41,5 @@ export {
   EvaluationCriterion,
   EvaluationRecommendation,
   NotificationType,
+  DelegationType,
 } from '@prisma/client';
