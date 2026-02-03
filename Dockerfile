@@ -52,8 +52,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY scripts/docker-start.sh /app/docker-start.sh
 RUN chmod +x /app/docker-start.sh
 
-# Expose port
-EXPOSE 4000
+# Expose port (matches railway.toml internalPort)
+EXPOSE 3001
 
 # Start app immediately, run migrations in background
 CMD ["/app/docker-start.sh"]

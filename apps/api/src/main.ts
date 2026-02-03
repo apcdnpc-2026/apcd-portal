@@ -110,11 +110,16 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document);
   }
 
-  const port = configService.get<number>('PORT', 4000);
+  const port = configService.get<number>('PORT', 3001);
   await app.listen(port);
-  console.warn(`APCD Portal API running on http://localhost:${port}`);
-  console.warn(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
-  console.warn(`Swagger docs: http://localhost:${port}/api/docs`);
+  console.log(`APCD Portal API running on http://localhost:${port}`);
+  console.log(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
+  if (configService.get<string>('NODE_ENV') !== 'production') {
+    console.log(`Swagger docs: http://localhost:${port}/api/docs`);
+  }
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('Failed to start application:', err);
+  process.exit(1);
+});
