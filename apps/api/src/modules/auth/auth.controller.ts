@@ -1,5 +1,6 @@
-import { Controller, Post, Get, Body, Headers, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -15,6 +16,7 @@ export class AuthController {
 
   @Public()
   @Post('register')
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 requests per minute
   @ApiOperation({ summary: 'Register a new OEM account' })
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
@@ -22,6 +24,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   async login(@Body() dto: LoginDto) {
@@ -30,6 +33,7 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
+  @Throttle({ default: { limit: 20, ttl: 60000 } }) // 20 requests per minute
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token' })
   async refresh(@Body('refreshToken') refreshToken: string, @Body('userId') userId: string) {
@@ -52,11 +56,6 @@ export class AuthController {
     return { message: 'Logged out successfully' };
   }
 
-  @Public()
-  @Post('reset-test-passwords')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset test user passwords (CI/CD only)' })
-  async resetTestPasswords(@Headers('x-seed-secret') secret: string) {
-    return this.authService.resetTestPasswords(secret);
-  }
+  // reset-test-passwords endpoint removed for production security
+  // Use direct database seed only in development/CI environments
 }

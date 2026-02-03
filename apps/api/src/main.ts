@@ -32,10 +32,37 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Security
+  // Security headers
+  const isProduction = configService.get<string>('NODE_ENV') === 'production';
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
+      // HSTS: enforce HTTPS for 1 year in production
+      hsts: isProduction ? { maxAge: 31536000, includeSubDomains: true } : false,
+      // Content Security Policy
+      contentSecurityPolicy: isProduction
+        ? {
+            directives: {
+              defaultSrc: ["'self'"],
+              styleSrc: ["'self'", "'unsafe-inline'"],
+              scriptSrc: ["'self'"],
+              imgSrc: ["'self'", 'data:', 'https:'],
+              connectSrc: ["'self'", 'https:'],
+              fontSrc: ["'self'"],
+              objectSrc: ["'none'"],
+              frameSrc: ["'none'"],
+              upgradeInsecureRequests: [],
+            },
+          }
+        : false,
+      // Prevent MIME-type sniffing
+      noSniff: true,
+      // XSS filter
+      xssFilter: true,
+      // Prevent clickjacking
+      frameguard: { action: 'deny' },
+      // Referrer policy
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     }),
   );
 
